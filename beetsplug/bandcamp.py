@@ -17,19 +17,22 @@
 BeautifulSoup library.
 """
 
-from __future__ import (division, absolute_import, print_function,
-                        unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-import beets.ui
-from beets.autotag.hooks import AlbumInfo, TrackInfo, Distance
-from beets import plugins
-from beetsplug import fetchart
+import re
+from datetime import datetime
+from typing import Dict, Optional, Tuple, Union
+
 import beets
-import requests
-from bs4 import BeautifulSoup
+import beets.ui
 import isodate
+import requests
 import six
+from beets import plugins
+from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
+from bs4 import BeautifulSoup, element
 
+from beetsplug import fetchart
 
 USER_AGENT = 'beets/{0} +http://beets.radbox.org/'.format(beets.__version__)
 BANDCAMP_SEARCH = 'http://bandcamp.com/search?q={query}&page={page}'
@@ -37,6 +40,12 @@ BANDCAMP_ALBUM = 'album'
 BANDCAMP_ARTIST = 'band'
 BANDCAMP_TRACK = 'track'
 ARTIST_TITLE_DELIMITER = ' - '
+HTML_ID_TRACKS = 'track_table'
+HTML_CLASS_TRACK = 'track_row_view'
+
+WORLDWIDE = 'XW'
+DIGITAL_MEDIA = 'Digital Media'
+BANDCAMP = 'bandcamp'
 
 
 class BandcampPlugin(plugins.BeetsPlugin):
@@ -126,38 +135,63 @@ class BandcampPlugin(plugins.BeetsPlugin):
                 albums.append(album)
         return albums
 
+    @staticmethod
+    def _get_album_metadata(meta: str, url: str) -> Dict[str, Union[str, datetime]]:
+        meta_lines = [line for line in meta.splitlines() if line]
+
+        # <release-name> by <artist>, released <day-of-the-month> <month-name> <year>
+        core_data = next(filter(lambda x: " by " in x and ", released " in x, meta_lines))
+        album, artist_date = core_data.split(" by ")
+        artist, human_date = artist_date.split(", released ")
+
+        # Even though there is an item_id in some urls in bandcamp, it's not
+        # visible on the page and you can't search by the id, so we need to use
+        # the url as id.
+        return {
+            "album": album,
+            "album_id": url,
+            "artist_url": url.split('/album/')[0],
+            "artist": artist,
+            "date": datetime.strptime(human_date, "%d %B %Y")
+        }
+
     def get_album_info(self, url):
         """Returns an AlbumInfo object for a bandcamp album page.
         """
+        def _report(msg: str, e: Exception, url: str = None) -> None:
+            self._log.debug(f"{msg} {url!r}: {e}")
+
         try:
             html = self._get(url)
-            name_section = html.find(id='name-section')
-            album = name_section.find(attrs={'itemprop': 'name'}).text.strip()
-            # Even though there is an item_id in some urls in bandcamp, it's not
-            # visible on the page and you can't search by the id, so we need to use
-            # the url as id.
-            album_id = url
-            artist = name_section.find(attrs={'itemprop': 'byArtist'}) .text.strip()
-            release = html.find('meta', attrs={'itemprop': 'datePublished'})['content']
-            release = isodate.parse_date(release)
-            artist_url = url.split('/album/')[0]
-            tracks = []
-            for row in html.find(id='track_table').find_all(attrs={'itemprop': 'tracks'}):
-                track = self._parse_album_track(row)
-                track.track_id = '{0}{1}'.format(artist_url, track.track_id)
-                tracks.append(track)
-
-            return AlbumInfo(album, album_id, artist, artist_url, tracks,
-                             year=release.year, month=release.month,
-                             day=release.day, country='XW', media='Digital Media',
-                             data_source='bandcamp', data_url=url)
         except requests.exceptions.RequestException as e:
-            self._log.debug("Communication error while fetching album {0!r}: "
-                            "{1}".format(url, e))
+            _report("Communication error while fetching album", e, url)
+        try:
+            meta = html.find('meta')['content']  # contains all we need really
+            alb = self._get_album_metadata(meta, url)
+            tracks = []
+            for row in html.find(id=HTML_ID_TRACKS).find_all(class_=HTML_CLASS_TRACK):
+                try:
+                    track = self._parse_album_track(row, url, alb['artist'])
+                except BandcampException as e:
+                    _report('Error: ', e, url)
+                tracks.append(track)
         except (TypeError, AttributeError) as e:
-            self._log.debug("Unexpected html while scraping album {0!r}: {1}".format(url, e))
-        except BandcampException as e:
-            self._log.debug('Error: {0}'.format(e))
+            _report("Unexpected html while scraping album", e, url)
+
+        return AlbumInfo(
+            alb['album'],
+            alb['album_id'],
+            alb['artist'],
+            alb['artist_url'],
+            tracks,
+            year=alb['date'].year,
+            month=alb['date'].month,
+            day=alb['date'].day,
+            country=WORLDWIDE,
+            media=DIGITAL_MEDIA,
+            data_source=BANDCAMP,
+            data_url=url
+        )
 
     def get_tracks(self, query):
         """Returns a list of TrackInfo objects for a bandcamp search query.
@@ -270,38 +304,52 @@ class BandcampPlugin(plugins.BeetsPlugin):
         r.raise_for_status()
         return BeautifulSoup(r.text, 'html.parser')
 
-    def _parse_album_track(self, track_html):
+    @staticmethod
+    def _parse_album_track(track_html: element.Tag, album_url: str, album_artist: str) -> TrackInfo:
         """Returns a TrackInfo derived from the html describing a track in a
         bandcamp album page.
         """
-        track_num = track_html['rel'].split('=')[1]
-        track_num = int(track_num)
+        info = list(filter(
+                lambda x: x and "info" not in x and "buy track" not in x,
+                map(lambda x: x.strip(), track_html.text.replace("\n", "").split("  "))
+            )
+        )
+        if len(info) == 2:
+            index_title, duration = info[0], info[1]
+            index, title = index_title.split(".")
+        else:
+            index = track_html.find(class_='track_number').text.replace(".", "")
+            title = track_html.find(class_='track-title').text
+            duration = track_html.find(class_='time').text.replace("\n", "").replace(" ", "")
 
-        title_html = track_html.find(attrs={'class': 'title-col'})
-        title = title_html.find(attrs={'itemprop': 'name'}).text.strip()
-        artist = None
-        if self.config['split_artist_title']:
-            artist, title = self._split_artist_title(title)
-        track_url = title_html.find(attrs={'itemprop': 'url'})
+        split_duration = duration.split(":")
+        hours = "0"
+        if len(split_duration) == 3:
+            hours = split_duration[0]
+            split_duration.remove(hours)
+        minutes, seconds = duration.split(':')
+        preparse_duration = f'PT{hours}H{minutes}M{seconds}S'
+        track_length = isodate.parse_duration(preparse_duration).total_seconds()
+
+        artist, title = _split_artist_title(title)
+        if not artist:
+            artist = album_artist
+
+        track_url = track_html.find(href=re.compile('/track'))
         if track_url is None:
-            raise BandcampException('No track url (id) for track {0} - {1}'.format(track_num, title))
-        track_id = track_url['href']
-        try:
-            duration = title_html.find('meta', attrs={'itemprop': 'duration'})['content']
-            duration = duration.replace('P', 'PT')
-            track_length = isodate.parse_duration(duration).total_seconds()
-        except TypeError:
-            track_length = None
+            raise BandcampException(f'No track url (id) for track {index} - {title}')
+        track_id = album_url.split("/album")[0] + track_url['href']
 
-        return TrackInfo(title, track_id, index=track_num, length=track_length, artist=artist)
+        return TrackInfo(title, track_id, index=index, length=track_length, artist=artist)
 
-    def _split_artist_title(self, title):
-        """Returns artist and title by splitting title on ARTIST_TITLE_DELIMITER.
-        """
-        parts = title.split(ARTIST_TITLE_DELIMITER)
-        if len(parts) == 1:
-            return None, title
-        return parts[0], ARTIST_TITLE_DELIMITER.join(parts[1:])
+
+def _split_artist_title(title: str) -> Tuple[Optional[str], str]:
+    """Returns artist and title by splitting title on ARTIST_TITLE_DELIMITER.
+    """
+    parts = title.split(ARTIST_TITLE_DELIMITER, maxsplit=1)
+    if len(parts) == 1:
+        return None, title
+    return parts[0], parts[1]
 
 
 class BandcampAlbumArt(fetchart.RemoteArtSource):
