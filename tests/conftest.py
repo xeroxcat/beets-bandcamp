@@ -115,7 +115,6 @@ def comp_meta():
         "expected_data": {
             "album": "01010100 Various Artists 001",
             "album_id": "https://01010100.bandcamp.com/album/01010100-various-artists-001",
-            # "album_id": -1,
             "artist": "01010100 Records",
             "artist_url": "https://01010100.bandcamp.com",
             "date": datetime(2020, 8, 14),
@@ -131,7 +130,6 @@ def album_meta():
         "expected_data": {
             "album": "Ekkert nema ískaldur veruleikinn",
             "album_id": "https://bbbbbbrecors.bandcamp.com/album/ekkert-nema-skaldur-veruleikinn",
-            # "album_id": -1,
             "artist": "KULDABOLI",
             "artist_url": "https://bbbbbbrecors.bandcamp.com",
             "date": datetime(2020, 12, 4),
@@ -155,7 +153,6 @@ def singleartist_track_soup():
             TrackInfo(
                 "Kuklari",
                 "https://bbbbbbrecors.bandcamp.com/track/kuklari",
-                # -1,
                 data_url="https://bbbbbbrecors.bandcamp.com/track/kuklari",
                 index=5,
                 length=350.0,
@@ -175,7 +172,6 @@ def comp_track_soup():
             TrackInfo(
                 "Wish Granter (Original Mix)",
                 "https://ismusberlin.bandcamp.com/track/zebar-zimo-wish-granter-original-mix",
-                # -1,
                 data_url="https://ismusberlin.bandcamp.com/track/zebar-zimo-wish-granter-original-mix",
                 index=1,
                 length=414.0,
