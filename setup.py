@@ -22,6 +22,8 @@ setup(
         'isodate'
     ],
 
+    tests_require=['pytest'],
+
     classifiers=[
         'Topic :: Multimedia :: Sound/Audio',
         'Topic :: Multimedia :: Sound/Audio :: Players :: MP3',
