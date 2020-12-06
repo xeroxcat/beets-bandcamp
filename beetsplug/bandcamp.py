@@ -68,8 +68,14 @@ def _parse_metadata(html, url):
 
     # <release-name> by <artist>, released <day-of-the-month> <month-name> <year>
     data = next(filter(lambda x: " by " in x and ", released " in x, meta_lines))
-    album, artist_and_date = data.split(" by ")
-    artist, human_date = artist_and_date.split(", released ")
+    try:
+        album, artist_and_date = data.split(" by ")
+        artist, human_date = artist_and_date.split(", released ")
+    except ValueError:
+        album_artist = html.find(name="title").text.split(" | ")
+        artist = album_artist[-1]
+        album = album_artist[-2]
+        human_date = data.split(", released ")[-1]
 
     return {
         "album": album,
