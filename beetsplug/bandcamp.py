@@ -17,7 +17,7 @@
 BeautifulSoup library.
 """
 
-from __future__ import (absolute_import, division, print_function, unicode_literals)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import re
 from datetime import datetime, timedelta
@@ -33,7 +33,6 @@ from bs4 import BeautifulSoup, element
 
 from beetsplug import fetchart
 
-
 USER_AGENT = 'beets/{0} +http://beets.radbox.org/'.format(beets.__version__)
 BANDCAMP_SEARCH = 'http://bandcamp.com/search?q={query}&page={page}'
 BANDCAMP_ALBUM = 'album'
@@ -48,7 +47,7 @@ WORLDWIDE = 'XW'
 DIGITAL_MEDIA = 'Digital Media'
 BANDCAMP = 'bandcamp'
 
-INDEX_TITLE_PAT = r'(\d\d?. ?)([ABCDEFGH]\d\d?. )?(.*)'
+INDEX_TITLE_PAT = r'(\d\d?. ?)([ABCDEFGH]{1,3}\d\d?. )?(.*)'
 SINGLE_TRACK_DURATION_PAT = r'duration":"P([^"]+)"'
 
 
@@ -72,8 +71,6 @@ def _parse_metadata(html, url):
     album, artist_and_date = data.split(" by ")
     artist, human_date = artist_and_date.split(", released ")
 
-    # Only MusicBrainz album id is accepted as album_id - having a url here breaks
-    # beets further down the process, therefore we use -1, - their default value
     return {
         "album": album,
         "album_id": url,
@@ -124,13 +121,13 @@ def _trackinfo_from_meta(meta: dict, html: BeautifulSoup) -> TrackInfo:
 
 
 def _parse_index_with_title(string):
-    # type: (str) -> Tuple[Optional[str], Optional[str], Optional[str]]
+    # type: (str) -> Tuple[Optional[str], Optional[int], Optional[str]]
     """Examples:
         6. A2. Cool Artist - Cool Track
         3. Okay Artist - Not Bad Track
         10.Uncool_Artist - Bad Track
     """
-    def clean_index(idx: str) -> str:
+    def clean(idx: str) -> str:
         """Remove . from the index and strip it."""
         return idx.replace(".", "").strip()
 
@@ -140,20 +137,20 @@ def _parse_index_with_title(string):
 
     split_match = list(match.groups())
     title = split_match.pop()
-    index = clean_index(split_match[0])
-    medium_index = clean_index(split_match[1]) if split_match[1] else None
-    return title, index, medium_index
+    index = int(clean(split_match[0]))
+    track_alt = clean(split_match[1]) if split_match[1] else None
+    return title, index, track_alt
 
 
 def _quick_track_data(info_strings):
     # type: (List[str]) -> Dict[str, Union[None, str, int, float]]
     """Parse track data from the initially parsed soup text."""
     index_title, duration = info_strings
-    title, index, medium_index = _parse_index_with_title(index_title)
+    title, index, track_alt = _parse_index_with_title(index_title)
     return {
         "title": title,
         "index": index,
-        "medium_index": medium_index,
+        "track_alt": track_alt,
         "duration": duration,
     }
 
@@ -163,8 +160,8 @@ def _volatile_track_data(track_html):
     """Given the above isn't available, try querying the html attributes."""
     return {
         "title": track_html.find(class_='track-title').text,
-        "index": track_html.find(class_='track_number').text.replace(".", ""),
-        "medium_index": 0,
+        "index": int(track_html.find(class_='track_number').text.replace(".", "")),
+        "track_alt": None,
         "duration": track_html.find(class_='time').text.replace("\n", "").replace(" ", "")
     }
 
@@ -405,7 +402,6 @@ class BandcampPlugin(plugins.BeetsPlugin):
         )
         if len(info) == 2:
             track = _quick_track_data(info)
-            print(track)
         else:
             track = _volatile_track_data(track_html)
         length = _duration_from_track_html(track['duration'])
@@ -420,7 +416,7 @@ class BandcampPlugin(plugins.BeetsPlugin):
             title,
             track_url,
             index=track['index'],
-            medium_index=track['medium_index'],
+            track_alt=track['track_alt'],
             length=length,
             data_url=track_url,
             artist=artist,
