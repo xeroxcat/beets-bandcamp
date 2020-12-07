@@ -192,13 +192,16 @@ def _quick_track_data(info_strings: List[str]) -> JSONDict:
 
 def _volatile_track_data(track_html: element.Tag) -> JSONDict:
     """Given the above isn't available, try querying the html attributes."""
+    title_el = track_html.find(class_="track-title")
+    index_el = track_html.find(class_="track_number")
+    duration_el = track_html.find(class_="time")
     return {
-        "title": track_html.find(class_="track-title").text,
-        "index": int(track_html.find(class_="track_number").text.replace(".", "")),
+        "title": title_el.text if title_el else None,
+        "index": int(index_el.text.replace(".", "")) if index_el else None,
         "track_alt": None,
-        "duration": track_html.find(class_="time")
-        .text.replace("\n", "")
-        .replace(" ", ""),
+        "duration": duration_el.text.replace("\n", "").replace(" ", "")
+        if duration_el
+        else None,  # this track is not released yet
     }
 
 
