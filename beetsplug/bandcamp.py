@@ -50,6 +50,7 @@ DIGITAL_MEDIA = 'Digital Media'
 BANDCAMP = 'bandcamp'
 
 INDEX_TITLE_PAT = r'(\d\d?. ?)([ABCDEFGH]{1,3}\d\d?. )?(.*)'
+HREF_URL_PAT = r'href="(http.*)"'
 SINGLE_TRACK_DURATION_PAT = r'duration":"P([^"]+)"'
 
 JSONDict = Dict[str, Any]
@@ -458,17 +459,26 @@ class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
         This only returns cover art urls for bandcamp albums (by id).
         """
         field = album.mb_albumid
-        if isinstance(field, six.string_types) and "bandcamp" in field:
-            html = self._get(field)
-            if not html:
+        if not isinstance(field, six.string_types) or "bandcamp" not in field:
+            return None
+
+        html = self._get(field)
+        if not html:
+            return None
+
+        try:
+            match = None
+            album_html = BeautifulSoup(html.text, "html.parser").find(id="tralbumArt")
+            if album_html:
+                match = re.search(HREF_URL_PAT, album_html.text)
+            if not match:
                 return None
 
-            try:
-                album_html = BeautifulSoup(html.text, "html.parser").find(id="tralbumArt")
-                image_url = album_html.find("a", attrs={"class": "popupImage"})["href"]
-                yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
-            except ValueError as e:
-                self._report("Unexpected html error fetching bandcamp album art: ", e)
+            image_url = match.groups()[0]
+            yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
+        except ValueError as e:
+            self._report("Unexpected html error fetching bandcamp album art: ", e)
+            return None
 
 
 class BandcampException(Exception):
