@@ -80,12 +80,12 @@ def _parse_metadata(html: BeautifulSoup, url: str) -> JSONDict:
     # a bit tricky considering that 'by' can be found in the album or artist names
     data = next(filter(lambda x: " by " in x and ", released " in x, meta_lines))
     try:
+        human_date = data.split(", released ")[-1]
+        album, artist, album_artist = _albumartist_from_title(html)
+    except (ValueError, AttributeError):
         album, artist_and_date = data.split(" by ")
         artist, human_date = artist_and_date.split(", released ")
         album_artist = None
-    except ValueError:
-        human_date = data.split(", released ")[-1]
-        album, artist, album_artist = _albumartist_from_title(html)
 
     return {
         "album": album,
@@ -133,7 +133,7 @@ def _trackinfo_from_meta(meta: JSONDict, html: BeautifulSoup) -> TrackInfo:
         artist_id=meta["artist_url"],
         data_source=BANDCAMP,
         media=DIGITAL_MEDIA,
-        data_url=meta["url"],
+        data_url=meta["artist_url"],
     )
 
 
@@ -205,8 +205,8 @@ class RequestsHandler:
     """A tiny class that provides the ability to make requests and handles failures."""
     _log = logging.Logger
 
-    def _report(self, msg, e=None, url=None, level="DEBUG"):
-        # type: (str, Optional[Exception], Optional[str], str) -> None
+    def _report(self, msg, e=None, url=None, level=logging.DEBUG):
+        # type: (str, Optional[Exception], Optional[str], int) -> None
         self._log.log(level, f"{msg} {url!r}: {e}")  # type: ignore[call-arg, arg-type]
 
     def _get(self, url: str) -> BeautifulSoup:
@@ -352,15 +352,15 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         lyrics will also be written to the file itself."""
         # Skip if the item already has lyrics.
         if item.lyrics:
-            self._report("lyrics already present: {0}", item, level="INFO")
+            self._report("lyrics already present: {0}", item, level=logging.INFO)
             return
 
         lyrics = self.get_item_lyrics(item)
         if not lyrics:
-            self._report("lyrics not found: {0}", item, level="INFO")
+            self._report("lyrics not found: {0}", item, level=logging.INFO)
             return
 
-        self._report("fetched lyrics: {0}", item, level="INFO")
+        self._report("fetched lyrics: {0}", item, level=logging.INFO)
         item.lyrics = lyrics
         if write:
             item.try_write()
@@ -383,7 +383,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         matching the query.
         """
         if search_type not in [BANDCAMP_ARTIST, BANDCAMP_ALBUM, BANDCAMP_TRACK]:
-            self._report("Invalid type for search: {0}".format(search_type), level="INFO")
+            self._report(f"Invalid type for search: {search_type}", level=logging.INFO)
             return []
 
         urls: List[str] = []
