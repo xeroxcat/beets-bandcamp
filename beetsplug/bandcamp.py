@@ -22,6 +22,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import logging
 import re
 from datetime import datetime, timedelta
+from html import unescape
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import beets
@@ -126,10 +127,10 @@ def _trackinfo_from_meta(meta: JSONDict, html: BeautifulSoup) -> TrackInfo:
     duration given the html soup.
     """
     return TrackInfo(
-        meta["album"],
-        meta["artist_url"],
+        unescape(meta["album"]),
+        unescape(meta["artist_url"]),
         length=_duration_from_soup(html),
-        artist=meta["artist"],
+        artist=unescape(meta["artist"]),
         artist_id=meta["artist_url"],
         data_source=BANDCAMP,
         media=DIGITAL_MEDIA,
@@ -139,9 +140,9 @@ def _trackinfo_from_meta(meta: JSONDict, html: BeautifulSoup) -> TrackInfo:
 
 def _albuminfo_from_meta(meta: JSONDict, tracks: List[TrackInfo]) -> AlbumInfo:
     return AlbumInfo(
-        meta["album"],
+        unescape(meta["album"]),
         meta["album_id"],
-        meta["album_artist"] or meta["artist"],
+        unescape(meta["album_artist"] or meta["artist"]),
         meta["artist_url"],
         tracks,
         year=meta["date"].year,
@@ -229,6 +230,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
             {
                 "source_weight": 0.5,
                 "min_candidates": 5,
+                "max_candidates": 5,
                 "lyrics": False,
                 "art": False,
                 "split_artist_title": False,
@@ -387,8 +389,9 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
             return []
 
         urls: List[str] = []
-        # Search bandcamp until min_candidates results have been found or
-        # we hit the last page in the results.
+        # Usually the search yields the correct result in the first 1-3 options.
+        # Therefore it doesn't make sense to go down the list until the end, and
+        # the users can choose the 'max_candidates' number.
         while len(urls) < self.config["min_candidates"].as_number():
             self._report("Searching {}, page {}".format(search_type, page))
             results = self._get(BANDCAMP_SEARCH.format(query=query, page=page))
@@ -400,6 +403,8 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
                 a = result.find(attrs={"class": "heading"}).a
                 if a:
                     urls.append(a["href"].split("?")[0])
+                    if len(urls) == self.config["max_candidates"]:
+                        break
 
             # Stop searching if we are on the last page.
             if not results.find("a", attrs={"class": "next"}):
@@ -432,13 +437,13 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         track_el = track_html.find(href=re.compile("/track"))
         track_url = album_url.split("/album")[0] + track_el["href"]
         return TrackInfo(
-            title,
+            unescape(title),
             track_url,
             index=track["index"],
             track_alt=track["track_alt"],
             length=length,
             data_url=track_url,
-            artist=artist,
+            artist=unescape(artist),
         )
 
 
