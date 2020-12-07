@@ -432,7 +432,8 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
             track = _quick_track_data(info)
         else:
             track = _volatile_track_data(track_html)
-        length = _duration_from_track_html(track["duration"])
+        duration = track['duration']
+        length = _duration_from_track_html(duration) if duration else None
 
         artist, title = _split_artist_title(track["title"])
         if not artist:
