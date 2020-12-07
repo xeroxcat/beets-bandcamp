@@ -19,9 +19,11 @@ BeautifulSoup library.
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from functools import partial
 from html import unescape
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
@@ -35,23 +37,26 @@ from bs4 import BeautifulSoup, element
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
-USER_AGENT = 'beets/{0} +http://beets.radbox.org/'.format(beets.__version__)
-BANDCAMP_SEARCH = 'http://bandcamp.com/search?q={query}&page={page}'
-BANDCAMP_ALBUM = 'album'
-BANDCAMP_ARTIST = 'band'
-BANDCAMP_TRACK = 'track'
-ARTIST_TITLE_DELIMITER = ' - '
-HTML_ID_TRACKS = 'track_table'
-HTML_CLASS_TRACK = 'track_row_view'
-HTML_META_DATE_FORMAT = '%d %B %Y'
+USER_AGENT = "beets/{0} +http://beets.radbox.org/".format(beets.__version__)
+BANDCAMP_SEARCH = "http://bandcamp.com/search?q={query}&page={page}"
+BANDCAMP_ALBUM = "album"
+BANDCAMP_ARTIST = "band"
+BANDCAMP_TRACK = "track"
+ARTIST_TITLE_DELIMITER = " - "
+HTML_ID_TRACKS = "track_table"
+HTML_CLASS_TRACK = "track_row_view"
+HTML_META_DATE_FORMAT = "%d %B %Y"
 
-WORLDWIDE = 'XW'
-DIGITAL_MEDIA = 'Digital Media'
-BANDCAMP = 'bandcamp'
+WORLDWIDE = "XW"
+DIGITAL_MEDIA = "Digital Media"
+BANDCAMP = "bandcamp"
 
-INDEX_TITLE_PAT = r'(\d\d?. ?)([ABCDEFGH]{1,3}\d\d?. )?(.*)'
+INDEX_TITLE_PAT = r"(\d\d?. ?)([ABCDEFGH]{1,3}\d\d?. )?(.*)"
 HREF_URL_PAT = r'href="(http.*)"'
 SINGLE_TRACK_DURATION_PAT = r'duration":"P([^"]+)"'
+META_DATE_PAT = '"release_date":"([^"]*)"'
+META_DATE_FORMAT = "%d %b %Y"
+META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
 
 JSONDict = Dict[str, Any]
 
@@ -64,38 +69,113 @@ def _split_artist_title(title: str) -> Tuple[Optional[str], str]:
     return parts[0], parts[1]
 
 
-def _albumartist_from_title(html: BeautifulSoup) -> Tuple[str, str, Optional[str]]:
-    """Parse the following data '<album> | <artist> [ | <album-artist ]'."""
-    split_info = html.find(name="title").text.split(" | ", maxsplit=2)
-    album, artist = split_info[0:2]
-    album_artist = None
-    if len(split_info) > 2:
-        album_artist = split_info[2]
-    return album, artist, album_artist
+class Metaguru:
+    SPLIT_ON = ", by "
+
+    _album = None  # type: str
+    _artist = None  # type: str
+    _raw_meta = None  # type: str
+    _release_date = None  # type: date
+    _tracks = []  # type: List[JSONDict]
+
+    soup_pot: BeautifulSoup
+    metasoup: partial[BeautifulSoup]
+
+    def __init__(self, soup: BeautifulSoup):
+        self.soup_pot = self.soup_pot
+        self.metasoup = partial(soup.find, name="meta")
+
+    def _property(self, name: str) -> Optional[str]:
+        """Expects to find
+        <meta content="of interest" property="{name}"/>
+        """
+        element = self.metasoup(property=name)
+        return element.get("content") if element else None
+
+    def _parse_album_with_artist(self) -> None:
+        if self.title and self.SPLIT_ON in self.title:
+            self._album, self._artist = self.title.split(self.SPLIT_ON)
+
+    @property
+    def title(self) -> Optional[str]:
+        return self._property("og:title")
+
+    @property
+    def type(self) -> Optional[str]:
+        """Song, album, etc."""
+        return self._property("og:type")
+
+    @property
+    def description(self) -> Optional[str]:
+        return self._property("og:description")
+
+    @property
+    def label(self) -> Optional[str]:
+        return self._property("og:site_name")
+
+    @property
+    def image(self) -> Optional[str]:
+        return self._property("og:image")
+
+    @property
+    def album(self) -> str:
+        if not self._album:
+            self._parse_album_with_artist()
+        return self._album
+
+    @property
+    def artist(self) -> str:
+        if not self._artist:
+            self._parse_album_with_artist()
+        return self._artist
+
+    @property
+    def release_date(self) -> date:
+        if self._release_date:
+            return self._release_date
+
+        match = re.search(META_DATE_PAT, self.metasoup())
+        if match:
+            datestr = match.groups()[0]
+        self._release_date = datetime.strptime(datestr[:11], META_DATE_FORMAT).date()
+        return self._release_date
+
+    @property
+    def tracks(self) -> List[JSONDict]:
+        """Some 'meta' list members contain tags (see above), but the most useful
+        lies in index 4 (as it stands). It's a huge, barely accessible json string
+        which contains more or less all we need, including the track information.
+          {'duration_secs': 128.0,
+           'name': 'Engann veginn nettur',
+           'url': 'https://bbbbbbrecors.bandcamp.com/track/engann-veginn-nettur',
+           'duration': 'P00H02M08S',
+           '@id': 'https://bbbbbbrecors.bandcamp.com/track/engann-veginn-nettur',
+           '@type': ['MusicRecording']},
+        """
+        if self._tracks:
+            return self._tracks
+
+        if not self._raw_meta:
+            # fetch the first rows as well, just in case the index moves in the future
+            # index 5 contains a (kind of) duplicate, so we ignore it
+            self._raw_meta = str(self.soup_pot.find_all("meta")[0:5])
+
+        for match in re.findall(META_TRACK_ITEM_PAT, self._raw_meta):
+            self._tracks.append(json.loads(match))
+
+        return self._tracks
 
 
 def _parse_metadata(html: BeautifulSoup, url: str) -> JSONDict:
     """Obtain release metadata from a page. Common to tracks and albums."""
-    # <release-name> by <artist>, released <day-of-the-month> <month-name> <year>
-    meta = html.find("meta")["content"]  # contains all we need really
-    meta_lines = [line for line in meta.splitlines() if line]
-    # a bit tricky considering that 'by' can be found in the album or artist names
-    data = next(filter(lambda x: " by " in x and ", released " in x, meta_lines))
-    try:
-        human_date = data.split(", released ")[-1]
-        album, artist, album_artist = _albumartist_from_title(html)
-    except (ValueError, AttributeError):
-        album, artist_and_date = data.split(" by ")
-        artist, human_date = artist_and_date.split(", released ")
-        album_artist = None
-
+    guru = Metaguru(html)
     return {
-        "album": album,
+        "album": guru.album,
         "album_id": url,
         "artist_url": url.split("/album/")[0],
-        "artist": artist,
-        "album_artist": album_artist,
-        "date": datetime.strptime(human_date, HTML_META_DATE_FORMAT),
+        "artist": guru.artist,
+        "label": guru.label,
+        "date": guru.release_date,
     }
 
 
@@ -125,7 +205,7 @@ def _duration_from_soup(soup: BeautifulSoup) -> Optional[float]:
 
 def _trackinfo_from_meta(meta: JSONDict, html: BeautifulSoup) -> TrackInfo:
     """Make TrackInfo object using common metadata. Additionally parse the
-    duration given the html soup.
+    duration given in the html soup.
     """
     return TrackInfo(
         unescape(meta["album"]),
@@ -208,6 +288,7 @@ def _volatile_track_data(track_html: element.Tag) -> JSONDict:
 
 class RequestsHandler:
     """A tiny class that provides the ability to make requests and handles failures."""
+
     _log = logging.Logger
 
     def _report(self, msg, e=None, url=None, level=logging.DEBUG):
@@ -432,7 +513,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
             track = _quick_track_data(info)
         else:
             track = _volatile_track_data(track_html)
-        duration = track['duration']
+        duration = track["duration"]
         length = _duration_from_track_html(duration) if duration else None
 
         artist, title = _split_artist_title(track["title"])
@@ -466,16 +547,8 @@ class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
         html = self._get(field)
         if not html:
             return None
-
         try:
-            match = None
-            album_html = BeautifulSoup(html.text, "html.parser").find(id="tralbumArt")
-            if album_html:
-                match = re.search(HREF_URL_PAT, album_html.text)
-            if not match:
-                return None
-
-            image_url = match.groups()[0]
+            image_url = Metaguru(html).image
             yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
         except ValueError as e:
             self._report("Unexpected html error fetching bandcamp album art: ", e)
