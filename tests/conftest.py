@@ -44,6 +44,16 @@ with poetic lyrics and spoken word.
     features="html.parser",
 )
 
+MULTIPLE_BY_SOUP = BeautifulSoup(
+    """
+<title>A Life on The Run | D-Leria | Avian</title>
+<meta content="
+A Life on The Run by Example by Avian, released 01 October 1999
+" name="description"/>
+    """,
+    features="html.parser",
+)
+
 SINGLEARTIST_TRACK_SOUP = BeautifulSoup(
     """
 <tr class="track_row_view linked" rel="tracknum=5">
@@ -115,6 +125,7 @@ def comp_meta():
         "expected_data": {
             "album": "01010100 Various Artists 001",
             "album_id": "https://01010100.bandcamp.com/album/01010100-various-artists-001",
+            "album_artist": None,
             "artist": "01010100 Records",
             "artist_url": "https://01010100.bandcamp.com",
             "date": datetime(2020, 8, 14),
@@ -130,6 +141,7 @@ def album_meta():
         "expected_data": {
             "album": "Ekkert nema ískaldur veruleikinn",
             "album_id": "https://bbbbbbrecors.bandcamp.com/album/ekkert-nema-skaldur-veruleikinn",
+            "album_artist": None,
             "artist": "KULDABOLI",
             "artist_url": "https://bbbbbbrecors.bandcamp.com",
             "date": datetime(2020, 12, 4),
@@ -137,7 +149,23 @@ def album_meta():
     }
 
 
-@pytest.fixture(params=[comp_meta, album_meta])
+def multiple_by_meta():
+    """Provide an example of html soup (album) metadata with expected values."""
+    return {
+        "html": MULTIPLE_BY_SOUP,
+        "url": "https://doesnt.matter/album/life-on-the-run",
+        "expected_data": {
+            "album": "A Life on The Run",
+            "album_artist": "Avian",
+            "album_id": "https://doesnt.matter/album/life-on-the-run",
+            "artist": "D-Leria",
+            "artist_url": "https://doesnt.matter",
+            "date": datetime(1999, 10, 1),
+        },
+    }
+
+
+@pytest.fixture(params=[comp_meta, album_meta, multiple_by_meta])
 def html_meta(request):
     """Provide all html metas one by one for testing."""
     yield request.param()
@@ -185,5 +213,3 @@ def comp_track_soup():
 def tracks_soup(request):
     """Provide various track soups."""
     yield request.param()
-
-
