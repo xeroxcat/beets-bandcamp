@@ -347,7 +347,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
 
         meta = _parse_metadata(html, url)
         if self.config["split_artist_title"]:
-            artist_from_title, meta["title"] = self._split_artist_title(meta["title"])
+            artist_from_title, meta["title"] = _split_artist_title(meta["title"])
             if artist_from_title:
                 meta["artist"] = artist_from_title
 
