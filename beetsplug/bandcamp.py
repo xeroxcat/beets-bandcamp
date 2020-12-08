@@ -91,6 +91,7 @@ def _parse_metadata(html: BeautifulSoup, url: str) -> JSONDict:
 
     return {
         "album": album,
+        "title": album,
         "album_id": url,
         "artist_url": url.split("/album/")[0],
         "artist": artist,
