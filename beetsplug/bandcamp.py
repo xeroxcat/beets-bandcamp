@@ -22,6 +22,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import json
 import logging
 import re
+from html import unescape
 from datetime import date, datetime
 from functools import partial
 from typing import Any, Dict, Iterator, List, MutableMapping, Optional, Tuple
@@ -55,7 +56,7 @@ WORLDWIDE = "XW"
 DIGITAL_MEDIA = "Digital Media"
 BANDCAMP = "bandcamp"
 
-META_DATE_PAT = '"release_date":"([^"]*)"'
+META_DATE_PAT = r'"release_date":"([^"]*)"'
 META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
 META_LYRICS_PAT = r'"lyrics":({[^}]*})'
 META_STANDALONE_DUR_PAT = r'"duration_secs":(\d+.\d+)'
@@ -73,11 +74,11 @@ class Metaguru:
 
     _album = None  # type: str
     _artist = None  # type: str
-    _raw_meta = None  # type: str
     _release_date = None  # type: date
     _propermap = {}  # type: MutableMapping[str, str]
     _tracks = []  # type: List[JSONDict]
     _lyrics = ""  # type: Optional[str]
+    _metastring = None  # type: str
 
     soup_pot: BeautifulSoup
     metasoup: "partial[BeautifulSoup]"
@@ -137,14 +138,20 @@ class Metaguru:
         return self._artist
 
     @property
+    def metastring(self) -> date:
+        if not self._metastring:
+            self._metastring = unescape(str(self.soup_pot.find_all("meta")))
+        return self._metastring
+
+    @property
     def release_date(self) -> date:
         if self._release_date:
             return self._release_date
-
-        match = re.search(META_DATE_PAT, self.metasoup())
+        match = re.search(META_DATE_PAT, self.metastring)
+        datestr = None
         if match:
             datestr = match.groups()[0]
-        self._release_date = datetime.strptime(datestr[:11], META_DATE_FORMAT).date()
+            self._release_date = datetime.strptime(datestr[:11], META_DATE_FORMAT).date()
         return self._release_date
 
     @property
@@ -161,11 +168,12 @@ class Metaguru:
         """
         if self._tracks:
             return self._tracks
-        if not self._raw_meta:
-            self._raw_meta = str(self.soup_pot.find_all("meta")[0:5])
-        for match in re.findall(META_TRACK_ITEM_PAT, self._raw_meta):
-            self._tracks.append(json.loads(match))
 
+        try:
+            match = next(re.finditer(r'({"byArtist[^<]*)', self.metastring))
+        except StopIteration:
+            return []
+        self._tracks.append(json.loads(match.groups()[0]))
         return self._tracks
 
     def track_artist(self, track_title: str) -> str:
