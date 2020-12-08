@@ -22,10 +22,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import json
 import logging
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from functools import partial
-from html import unescape
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, MutableMapping, Optional, Tuple
 
 import beets
 import beets.ui
@@ -33,68 +32,76 @@ import requests
 import six
 from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
-from bs4 import BeautifulSoup, element
+from bs4 import BeautifulSoup
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
+DEFAULT_CONFIG = {
+    "source_weight": 0.5,
+    "min_candidates": 5,
+    "max_candidates": 5,
+    "lyrics": False,
+    "art": False,
+    "split_artist_title": False,
+}
+
 USER_AGENT = "beets/{0} +http://beets.radbox.org/".format(beets.__version__)
 BANDCAMP_SEARCH = "http://bandcamp.com/search?q={query}&page={page}"
-BANDCAMP_ALBUM = "album"
-BANDCAMP_ARTIST = "band"
-BANDCAMP_TRACK = "track"
-ARTIST_TITLE_DELIMITER = " - "
-HTML_ID_TRACKS = "track_table"
-HTML_CLASS_TRACK = "track_row_view"
-HTML_META_DATE_FORMAT = "%d %B %Y"
+ALBUM = "album"
+ARTIST = "band"
+TRACK = "track"
 
 WORLDWIDE = "XW"
 DIGITAL_MEDIA = "Digital Media"
 BANDCAMP = "bandcamp"
 
-INDEX_TITLE_PAT = r"(\d\d?. ?)([ABCDEFGH]{1,3}\d\d?. )?(.*)"
-HREF_URL_PAT = r'href="(http.*)"'
-SINGLE_TRACK_DURATION_PAT = r'duration":"P([^"]+)"'
 META_DATE_PAT = '"release_date":"([^"]*)"'
-META_DATE_FORMAT = "%d %b %Y"
 META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
+META_LYRICS_PAT = r'"lyrics":({[^}]*})'
+META_STANDALONE_DUR_PAT = r'"duration_secs":(\d+.\d+)'
+
+META_DATE_FORMAT = "%d %b %Y"
 
 JSONDict = Dict[str, Any]
 
 
-def _split_artist_title(title: str) -> Tuple[Optional[str], str]:
-    """Returns artist and title by splitting title on ARTIST_TITLE_DELIMITER."""
-    parts = title.split(ARTIST_TITLE_DELIMITER, maxsplit=1)
-    if len(parts) == 1:
-        return None, title
-    return parts[0], parts[1]
-
-
 class Metaguru:
-    SPLIT_ON = ", by "
+    ALBUM_SPLIT = ", by "
+    TRACK_SPLIT = " - "
+
+    COMMON = {"data_source": BANDCAMP, "media": DIGITAL_MEDIA}
 
     _album = None  # type: str
     _artist = None  # type: str
     _raw_meta = None  # type: str
     _release_date = None  # type: date
+    _propermap = {}  # type: MutableMapping[str, str]
     _tracks = []  # type: List[JSONDict]
+    _lyrics = ""  # type: Optional[str]
 
     soup_pot: BeautifulSoup
-    metasoup: partial[BeautifulSoup]
+    metasoup: "partial[BeautifulSoup]"
+    url: str
 
-    def __init__(self, soup: BeautifulSoup):
-        self.soup_pot = self.soup_pot
+    def __init__(self, soup: BeautifulSoup, url: str) -> None:
+        self.soup_pot = soup
         self.metasoup = partial(soup.find, name="meta")
+        self.url = url
 
     def _property(self, name: str) -> Optional[str]:
         """Expects to find
         <meta content="of interest" property="{name}"/>
         """
-        element = self.metasoup(property=name)
-        return element.get("content") if element else None
+        if name in self._propermap:
+            return self._propermap[name]
+
+        item = self.metasoup(property=name)
+        self._propermap[name] = item.get("content") if item else None
+        return self._propermap[name]
 
     def _parse_album_with_artist(self) -> None:
-        if self.title and self.SPLIT_ON in self.title:
-            self._album, self._artist = self.title.split(self.SPLIT_ON)
+        if self.title and self.ALBUM_SPLIT in self.title:
+            self._album, self._artist = self.title.split(self.ALBUM_SPLIT)
 
     @property
     def title(self) -> Optional[str]:
@@ -154,136 +161,84 @@ class Metaguru:
         """
         if self._tracks:
             return self._tracks
-
         if not self._raw_meta:
-            # fetch the first rows as well, just in case the index moves in the future
-            # index 5 contains a (kind of) duplicate, so we ignore it
             self._raw_meta = str(self.soup_pot.find_all("meta")[0:5])
-
         for match in re.findall(META_TRACK_ITEM_PAT, self._raw_meta):
             self._tracks.append(json.loads(match))
 
         return self._tracks
 
+    def track_artist(self, track_title: str) -> str:
+        if self.TRACK_SPLIT in track_title:
+            return track_title.split(self.TRACK_SPLIT, maxsplit=1)[0]
+        return self.artist
 
-def _parse_metadata(html: BeautifulSoup, url: str) -> JSONDict:
-    """Obtain release metadata from a page. Common to tracks and albums."""
-    guru = Metaguru(html)
-    return {
-        "album": guru.album,
-        "album_id": url,
-        "artist_url": url.split("/album/")[0],
-        "artist": guru.artist,
-        "label": guru.label,
-        "date": guru.release_date,
-    }
-
-
-def _duration_in_seconds(time_str: str) -> float:
-    t = datetime.strptime(time_str, "%HH%MM%SS")
-    return timedelta(hours=t.hour, minutes=t.minute, seconds=t.second).total_seconds()
-
-
-def _duration_from_track_html(parsed_duration: str) -> Optional[float]:
-    """Get duration that's found in a page with multiple songs."""
-    split_duration = parsed_duration.split(":")
-    hours = "00"
-    if len(split_duration) == 3:
-        hours = split_duration[0]
-        split_duration.remove(hours)
-    minutes, seconds = split_duration
-    return _duration_in_seconds(f"{hours}H{minutes}M{seconds}S")
-
-
-def _duration_from_soup(soup: BeautifulSoup) -> Optional[float]:
-    """Get duration that's found in a page with a single song/release."""
-    match = re.search(SINGLE_TRACK_DURATION_PAT, str(soup))
-    if not match:
+    def standalone_track_duration(self) -> Optional[float]:
+        match = re.search(META_STANDALONE_DUR_PAT, self.metasoup())
+        if match:
+            return match.groups()[0]  # type: ignore[no-any-return]
         return None
-    return _duration_in_seconds(list(match.groups()).pop())
 
+    @property
+    def lyrics(self) -> Optional[str]:
+        if self._lyrics or self._lyrics is None:
+            return self._lyrics
 
-def _trackinfo_from_meta(meta: JSONDict, html: BeautifulSoup) -> TrackInfo:
-    """Make TrackInfo object using common metadata. Additionally parse the
-    duration given in the html soup.
-    """
-    return TrackInfo(
-        unescape(meta["album"]),
-        unescape(meta["artist_url"]),
-        length=_duration_from_soup(html),
-        artist=unescape(meta["artist"]),
-        artist_id=meta["artist_url"],
-        data_source=BANDCAMP,
-        media=DIGITAL_MEDIA,
-        data_url=meta["artist_url"],
-    )
+        if not self._raw_meta:
+            self._raw_meta = str(self.soup_pot.find_all("meta")[0:5])
+        lyrics_matches = re.findall(META_LYRICS_PAT, self._raw_meta)
+        lyrics = []
+        for match in lyrics_matches:
+            lyrics.append(json.loads(match)["text"])
+            self._lyrics = "\n\n".join(lyrics)
+        else:
+            self._lyrics = None
 
+        return self._lyrics
 
-def _albuminfo_from_meta(meta: JSONDict, tracks: List[TrackInfo]) -> AlbumInfo:
-    return AlbumInfo(
-        unescape(meta["album"]),
-        meta["album_id"],
-        unescape(meta["album_artist"] or meta["artist"]),
-        meta["artist_url"],
-        tracks,
-        year=meta["date"].year,
-        month=meta["date"].month,
-        day=meta["date"].day,
-        country=WORLDWIDE,
-        media=DIGITAL_MEDIA,
-        data_source=BANDCAMP,
-        data_url=meta["album_id"],
-    )
+    @property
+    def standalone_trackinfo(self) -> TrackInfo:
+        return TrackInfo(
+            self.album,
+            self.url,
+            length=self.standalone_track_duration(),
+            artist=self.artist,
+            artist_id=self.url,
+            data_url=self.url,
+            label=self.label,
+            **self.COMMON,
+        )
 
+    def _trackinfo(self, track: JSONDict, index: int) -> TrackInfo:
+        TrackInfo(
+            track["name"],
+            track["url"],
+            index=index,
+            length=track["duration_secs"],
+            data_url=track["url"],
+            artist=self.track_artist(track["name"]),
+        )
 
-def _parse_index_with_title(string):
-    # type: (str) -> Tuple[Optional[str], Optional[int], Optional[str]]
-    """Examples:
-    6. A2. Cool Artist - Cool Track
-    3. Okay Artist - Not Bad Track
-    10.Uncool_Artist - Bad Track
-    """
+    @property
+    def trackinfos(self) -> List[TrackInfo]:
+        # track_alt=track["track_alt"],
+        return [self._trackinfo(track, idx) for idx, track in enumerate(self.tracks, 1)]
 
-    def clean(idx: str) -> str:
-        """Remove . from the index and strip it."""
-        return idx.replace(".", "").strip()
-
-    match = re.match(INDEX_TITLE_PAT, string)
-    if not match:
-        return None, None, None
-
-    split_match = list(match.groups())
-    title = split_match.pop()
-    index = int(clean(split_match[0]))
-    track_alt = clean(split_match[1]) if split_match[1] else None
-    return title, index, track_alt
-
-
-def _quick_track_data(info_strings: List[str]) -> JSONDict:
-    """Parse track data from the initially parsed soup text."""
-    index_title, duration = info_strings
-    title, index, track_alt = _parse_index_with_title(index_title)
-    return {
-        "title": title,
-        "index": index,
-        "track_alt": track_alt,
-        "duration": duration,
-    }
-
-
-def _volatile_track_data(track_html: element.Tag) -> JSONDict:
-    """Given the above isn't available, try querying the html attributes."""
-    title_el = track_html.find(class_="track-title")
-    index_el = track_html.find(class_="track_number")
-    duration_el = track_html.find(class_="time")
-    return {
-        "title": title_el.text if title_el else None,
-        "index": int(index_el.text.replace(".", "")) if index_el else None,
-        "track_alt": None,
-        "duration": duration_el.text.replace("\n", "").replace(" ", "")
-        if duration_el
-        else None,  # this track is not released yet
-    }
+    def albuminfo(self) -> AlbumInfo:
+        return AlbumInfo(
+            self.album,
+            self.url,
+            self.artist,
+            self.url,
+            self.trackinfos,
+            year=self.release_date.year,
+            month=self.release_date.month,
+            day=self.release_date.day,
+            label=self.label,
+            country=WORLDWIDE,
+            data_url=self.url,
+            **self.COMMON,
+        )
 
 
 class RequestsHandler:
@@ -297,7 +252,6 @@ class RequestsHandler:
 
     def _get(self, url: str) -> BeautifulSoup:
         """Returns a BeautifulSoup object with the contents of url."""
-        # TODO: Handle the error properly
         headers = {"User-Agent": USER_AGENT}
         try:
             r = requests.get(url, headers=headers)
@@ -311,18 +265,20 @@ class RequestsHandler:
 class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
     def __init__(self) -> None:
         super(BandcampPlugin, self).__init__()
-        self.config.add(
-            {
-                "source_weight": 0.5,
-                "min_candidates": 5,
-                "max_candidates": 5,
-                "lyrics": False,
-                "art": False,
-                "split_artist_title": False,
-            }
-        )
+        self.config.add(DEFAULT_CONFIG)
         self.import_stages = [self.imported]
         self.register_listener("pluginload", self.loaded)
+
+    def _from_bandcamp(self, item: Any) -> bool:
+        return hasattr(item, "data_source") and item.data_source == BANDCAMP
+
+    def imported(self, _: Any, task: Any) -> None:
+        """Import hook for fetching lyrics from bandcamp automatically."""
+        if self.config["lyrics"]:
+            for item in task.imported_items():
+                # Only fetch lyrics for items from bandcamp
+                if self._from_bandcamp(item):
+                    self.add_lyrics(item, True)
 
     def loaded(self) -> None:
         # Add our own artsource to the fetchart plugin.
@@ -334,24 +290,62 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
                     plugin.sources = [
                         BandcampAlbumArt(plugin._log, self.config)
                     ] + plugin.sources
-                    fetchart.ART_SOURCES["bandcamp"] = BandcampAlbumArt
-                    fetchart.SOURCE_NAMES[BandcampAlbumArt] = "bandcamp"
+                    fetchart.ART_SOURCES[BANDCAMP] = BandcampAlbumArt
+                    fetchart.SOURCE_NAMES[BandcampAlbumArt] = BANDCAMP
                     break
 
-    def album_distance(self, items, album_info, _):
-        # type: (List[TrackInfo], AlbumInfo, Any) -> Distance
+    def add_lyrics(self, item: Any, write: bool = False) -> None:
+        """Fetch and store lyrics for a single item. If ``write``, then the
+        lyrics will also be written to the file itself."""
+        # Skip if the item already has lyrics.
+        if item.lyrics:
+            self._report("lyrics already present: {0}", item, level=logging.INFO)
+            return None
+
+        html = self._get(item.mb_trackid)
+        if not html:
+            return None
+
+        lyrics = self.guru.lyrics
+        if not lyrics:
+            self._report("lyrics not found: {0}", item, level=logging.INFO)
+            return None
+
+        self._report("fetched lyrics: {0}", item, level=logging.INFO)
+        item.lyrics = lyrics
+        if write:
+            item.try_write()
+        item.store()
+
+    def album_distance(self, items: List[Any], album_info: AlbumInfo, _: Any) -> Distance:
         """Returns the album distance."""
         dist = Distance()
-        if hasattr(album_info, "data_source") and album_info.data_source == "bandcamp":
+
+        if self._from_bandcamp(album_info):
             dist.add("source", self.config["source_weight"].as_number())
         return dist
 
-    def candidates(self, items, artist, album, va_likely, extra_tags=None):
-        # type: (List[TrackInfo], str, str, bool, Optional[List[str]]) -> List[AlbumInfo]
+    def candidates(self, items, artist, album, va_likely):
+        # type: (List[Any], str, str, bool) -> List[AlbumInfo]
         """Returns a list of AlbumInfo objects for bandcamp search results
         matching an album and artist (if not various).
         """
-        return self.get_albums(album)
+        return [
+            album
+            for album in (self.get_album_info(url) for url in self._search(album, ALBUM))
+            if album
+        ]
+
+    def item_candidates(self, item: Any, artist: str, album: str) -> List[TrackInfo]:
+        """Returns a list of TrackInfo objects from a bandcamp search matching a
+        singleton.
+        """
+        query = item.title or item.album or item.artist
+        return [
+            track
+            for track in (self.get_track_info(url) for url in self._search(query, TRACK))
+            if track
+        ]
 
     def album_for_id(self, album_id: str) -> AlbumInfo:
         """Fetches an album by its bandcamp ID and returns an AlbumInfo object
@@ -360,116 +354,32 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         # We use album url as id, so we just need to fetch and parse the album page.
         return self.get_album_info(album_id)
 
-    def item_candidates(self, item: Any, artist: str, album: str) -> List[TrackInfo]:
-        """Returns a list of TrackInfo objects from a bandcamp search matching
-        a singleton.
-        """
-        param = item.title or item.album or item.artist
-        if param:
-            return self.get_tracks(param)
-        return []
-
     def track_for_id(self, track_id: str) -> TrackInfo:
         """Fetches a track by its bandcamp ID and returns a TrackInfo object
         or None if the track is not found.
         """
         return self.get_track_info(track_id)
 
-    def imported(self, _: Any, task: Any) -> None:
-        """Import hook for fetching lyrics from bandcamp automatically."""
-        if self.config["lyrics"]:
-            for item in task.imported_items():
-                # Only fetch lyrics for items from bandcamp
-                if hasattr(item, "data_source") and item.data_source == "bandcamp":
-                    self.add_lyrics(item, True)
-
-    def get_albums(self, query: str) -> List[AlbumInfo]:
-        """Returns a list of AlbumInfo objects for a bandcamp search query."""
-        albums = []
-        for url in self._search(query, BANDCAMP_ALBUM):
-            album = self.get_album_info(url)
-            if album is not None:
-                albums.append(album)
-        return albums
-
     def get_album_info(self, url: str) -> Optional[AlbumInfo]:
-        """Return an AlbumInfo object for a bandcamp album page.
-        If it's a link to a track instead, return that track.
-        """
+        """Return an AlbumInfo object for a bandcamp album page."""
         html = self._get(url)
         if not html:
             return None
-
-        try:
-            meta = _parse_metadata(html, url)
-            tracks_html = html.find(id=HTML_ID_TRACKS)
-            if not tracks_html:
-                return _albuminfo_from_meta(meta, [_trackinfo_from_meta(meta, html)])
-
-            tracks = []
-            for row in tracks_html.find_all(class_=HTML_CLASS_TRACK):
-                tracks.append(self._parse_album_track(row, url, meta["artist"]))
-
-        except (ValueError, TypeError, AttributeError) as e:
-            self._report("Unexpected html while scraping album", e, url)
-            return None
-        return _albuminfo_from_meta(meta, tracks)
-
-    def get_tracks(self, query: str) -> List[TrackInfo]:
-        """Returns a list of TrackInfo objects for a bandcamp search query."""
-        track_urls = self._search(query, BANDCAMP_TRACK)
-        return [self.get_track_info(url) for url in track_urls]
+        return Metaguru(html, url).albuminfo()
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
         html = self._get(url)
         if not html:
             return None
+        return Metaguru(html, url).standalone_trackinfo()
 
-        meta = _parse_metadata(html, url)
-        if self.config["split_artist_title"]:
-            artist_from_title, meta["title"] = self._split_artist_title(meta["title"])
-            if artist_from_title:
-                meta["artist"] = artist_from_title
-
-        return _trackinfo_from_meta(meta, html)
-
-    def add_lyrics(self, item: Any, write: bool = False) -> None:
-        """Fetch and store lyrics for a single item. If ``write``, then the
-        lyrics will also be written to the file itself."""
-        # Skip if the item already has lyrics.
-        if item.lyrics:
-            self._report("lyrics already present: {0}", item, level=logging.INFO)
-            return
-
-        lyrics = self.get_item_lyrics(item)
-        if not lyrics:
-            self._report("lyrics not found: {0}", item, level=logging.INFO)
-            return
-
-        self._report("fetched lyrics: {0}", item, level=logging.INFO)
-        item.lyrics = lyrics
-        if write:
-            item.try_write()
-        item.store()
-
-    def get_item_lyrics(self, item: Any) -> Optional[str]:
-        """Get the lyrics for item from bandcamp."""
-        # The track id is the bandcamp url when item.data_source is bandcamp.
-        html = self._get(item.mb_trackid)
-        if not html:
-            return None
-        lyrics = html.find(attrs={"class": "lyricsText"})
-        if lyrics:
-            return lyrics.text  # type: ignore[no-any-return]
-        return None
-
-    def _search(self, query, search_type=BANDCAMP_ALBUM, page=1):
+    def _search(self, query, search_type=ALBUM, page=1):
         # type: (str, str, int) -> List[str]
         """Returns a list of bandcamp urls for items of type search_type
         matching the query.
         """
-        if search_type not in [BANDCAMP_ARTIST, BANDCAMP_ALBUM, BANDCAMP_TRACK]:
+        if search_type not in [ARTIST, ALBUM, TRACK]:
             self._report(f"Invalid type for search: {search_type}", level=logging.INFO)
             return []
 
@@ -498,40 +408,6 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
 
         return urls
 
-    def _parse_album_track(self, track_html, album_url, album_artist):
-        # type: (element.Tag, str, str) -> TrackInfo
-        """Returns a TrackInfo derived from the html describing a track in a
-        bandcamp album page.
-        """
-        info: List[str] = []
-        for el in track_html.text.replace("\n", "").split("  "):
-            el.strip()
-            if all([el, el != "info", el != "buy track"]):
-                info.append(el)
-
-        if len(info) == 2:
-            track = _quick_track_data(info)
-        else:
-            track = _volatile_track_data(track_html)
-        duration = track["duration"]
-        length = _duration_from_track_html(duration) if duration else None
-
-        artist, title = _split_artist_title(track["title"])
-        if not artist:
-            artist = album_artist
-
-        track_el = track_html.find(href=re.compile("/track"))
-        track_url = album_url.split("/album")[0] + track_el["href"]
-        return TrackInfo(
-            unescape(title),
-            track_url,
-            index=track["index"],
-            track_alt=track["track_alt"],
-            length=length,
-            data_url=track_url,
-            artist=unescape(artist),
-        )
-
 
 class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
     NAME = "Bandcamp"
@@ -540,15 +416,15 @@ class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
-        field = album.mb_albumid
-        if not isinstance(field, six.string_types) or "bandcamp" not in field:
+        url = album.mb_albumid
+        if not isinstance(url, six.string_types) or BANDCAMP not in url:
             return None
 
-        html = self._get(field)
+        html = self._get(url)
         if not html:
             return None
         try:
-            image_url = Metaguru(html).image
+            image_url = Metaguru(html, url).image
             yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
         except ValueError as e:
             self._report("Unexpected html error fetching bandcamp album art: ", e)
