@@ -147,11 +147,12 @@ class Metaguru:
     def release_date(self) -> date:
         if self._release_date:
             return self._release_date
-        match = re.search(META_DATE_PAT, self.metastring)
-        datestr = None
-        if match:
-            datestr = match.groups()[0]
+        try:
+            datestr = re.search(META_DATE_PAT, self.metastring).groups()[0]
             self._release_date = datetime.strptime(datestr[:11], META_DATE_FORMAT).date()
+        except ValueError:
+            self._release_date = None
+
         return self._release_date
 
     @property
