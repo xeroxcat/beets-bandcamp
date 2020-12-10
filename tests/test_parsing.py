@@ -1,4 +1,3 @@
-from datetime import date
 from functools import partial
 
 import pytest
@@ -6,38 +5,51 @@ import pytest
 from beetsplug.bandcamp import Metaguru
 
 
-@pytest.fixture
-def url():
-    return "https://mega-tech.bandcamp.com/track/matriark-arangel"
+def test_init(single_track_soup) -> None:
+    soup, url, _ = single_track_soup
 
+    guru = Metaguru(soup, url)
 
-@pytest.fixture
-def guru(track_meta_soup, url):
-    return Metaguru(track_meta_soup, url)
-
-
-def test_init(track_meta_soup):
-
-    guru = Metaguru(track_meta_soup, url)
-
-    assert guru.soup_pot == track_meta_soup
+    assert guru.soup == soup
     assert isinstance(guru.metasoup, partial)
     assert guru.url == url
 
 
-def test_parse_properties(guru):
-    assert guru.title == "Matriark - Arangel, by Megatech"
-    assert guru.type == "song"
-    assert guru.image == "https://f4.bcbits.com/img/a2036476476_5.jpg"
-    assert guru.album == "Matriark - Arangel"
-    assert guru.artist == "Megatech"
-    assert guru.label == "Megatech"
-    assert guru.description == " track by Megatech "
+def test_parse_single_track(single_track_soup) -> None:
+    soup, url, expected = single_track_soup
+    guru = Metaguru(soup, url)
+
+    assert guru.title == expected.title
+    assert guru.type == expected.type
+    assert guru.image == expected.image
+    assert guru.album == expected.album
+    assert guru.artist == expected.artist
+    assert guru.label == expected.label
+    assert guru.description == expected.description
+    assert guru.release_date == expected.release_date
+    assert len(guru.raw_tracks) == expected.track_count
+    assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
+    if not expected.albuminfo:
+        assert not guru.albuminfo
+    else:
+        assert vars(guru.albuminfo) == vars(expected.albuminfo)
 
 
-def test_parse_release_date(guru):
-    assert guru.release_date == date(2020, 11, 9)
+def test_parse_album(album_soup) -> None:
+    soup, url, expected = album_soup
+    guru = Metaguru(soup, url)
 
-
-def test_parse_track(guru):
-    assert len(guru.tracks) == 1
+    assert guru.title == expected.title
+    assert guru.type == expected.type
+    assert guru.image == expected.image
+    assert guru.album == expected.album
+    assert guru.artist == expected.artist
+    assert guru.label == expected.label
+    assert guru.description == expected.description
+    assert guru.release_date == expected.release_date
+    assert len(guru.raw_tracks) == expected.track_count
+    assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
+    if not expected.albuminfo:
+        assert not guru.albuminfo
+    else:
+        assert vars(guru.albuminfo) == vars(expected.albuminfo)

@@ -14,6 +14,7 @@ include = ["README.rst"]
 [tool.poetry.dependencies]
 python = "^3.6"
 
+dataclasses = "*"
 beautifulsoup4 = "*"
 beets = ">=1.4.6"
 requests = "*"
@@ -23,6 +24,8 @@ six = ">=1.9"
 pytest = "*"
 coverage = "^5.3"
 pytest-cov = "^2.10.1"
+mypy = "^0.790"
+flake8 = "^3.8.4"
 
 [tool.coverage.run]
 branch = true

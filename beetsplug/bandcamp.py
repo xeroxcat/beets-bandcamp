@@ -22,9 +22,10 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import json
 import logging
 import re
-from html import unescape
 from datetime import date, datetime
 from functools import partial
+from html import unescape
+from math import floor
 from typing import Any, Dict, Iterator, List, MutableMapping, Optional, Tuple
 
 import beets
@@ -75,19 +76,21 @@ class Metaguru:
     _album = None  # type: str
     _artist = None  # type: str
     _release_date = None  # type: date
-    _propermap = {}  # type: MutableMapping[str, str]
-    _tracks = []  # type: List[JSONDict]
     _lyrics = ""  # type: Optional[str]
     _metastring = None  # type: str
+    _propermap: MutableMapping[str, str]
+    _raw_tracks: List[JSONDict]
 
-    soup_pot: BeautifulSoup
+    soup: BeautifulSoup
     metasoup: "partial[BeautifulSoup]"
     url: str
 
     def __init__(self, soup: BeautifulSoup, url: str) -> None:
-        self.soup_pot = soup
-        self.metasoup = partial(soup.find, name="meta")
+        self.soup = soup
+        self.metasoup = partial(self.soup.find, name="meta")
         self.url = url
+        self._propermap = dict()
+        self._raw_tracks = []
 
     def _property(self, name: str) -> Optional[str]:
         """Expects to find
@@ -138,25 +141,25 @@ class Metaguru:
         return self._artist
 
     @property
-    def metastring(self) -> date:
+    def metastring(self) -> str:
         if not self._metastring:
-            self._metastring = unescape(str(self.soup_pot.find_all("meta")))
+            self._metastring = unescape(str(self.soup.find_all("meta")))
         return self._metastring
 
     @property
-    def release_date(self) -> date:
+    def release_date(self) -> Optional[date]:
         if self._release_date:
             return self._release_date
         try:
             datestr = re.search(META_DATE_PAT, self.metastring).groups()[0]
             self._release_date = datetime.strptime(datestr[:11], META_DATE_FORMAT).date()
-        except ValueError:
-            self._release_date = None
+        except AttributeError:
+            return None
 
         return self._release_date
 
     @property
-    def tracks(self) -> List[JSONDict]:
+    def raw_tracks(self) -> List[JSONDict]:
         """Some 'meta' list members contain tags (see above), but the most useful
         lies in index 4 (as it stands). It's a huge, barely accessible json string
         which contains more or less all we need, including the track information.
@@ -167,35 +170,34 @@ class Metaguru:
            '@id': 'https://bbbbbbrecors.bandcamp.com/track/engann-veginn-nettur',
            '@type': ['MusicRecording']},
         """
-        if self._tracks:
-            return self._tracks
+        if self._raw_tracks or self._raw_tracks is None:
+            return self._raw_tracks
 
-        try:
-            match = next(re.finditer(r'({"byArtist[^<]*)', self.metastring))
-        except StopIteration:
-            return []
-        self._tracks.append(json.loads(match.groups()[0]))
-        return self._tracks
+        match = re.findall(r'{[^}{]*duration_secs({[^{]*}.*)*}', self.metastring)
+        print(len(match))
+        added = set()
+        for a in match:
+            print(a)
+            track = json.loads(a)
+            if track["@id"] not in added:
+                self._raw_tracks.append(track)
+                added.add(track["@id"])
+
+        from pprint import pprint
+        pprint(self._raw_tracks)
+        return self._raw_tracks
 
     def track_artist(self, track_title: str) -> str:
         if self.TRACK_SPLIT in track_title:
             return track_title.split(self.TRACK_SPLIT, maxsplit=1)[0]
         return self.artist
 
-    def standalone_track_duration(self) -> Optional[float]:
-        match = re.search(META_STANDALONE_DUR_PAT, self.metasoup())
-        if match:
-            return match.groups()[0]  # type: ignore[no-any-return]
-        return None
-
     @property
     def lyrics(self) -> Optional[str]:
         if self._lyrics or self._lyrics is None:
             return self._lyrics
 
-        if not self._raw_meta:
-            self._raw_meta = str(self.soup_pot.find_all("meta")[0:5])
-        lyrics_matches = re.findall(META_LYRICS_PAT, self._raw_meta)
+        lyrics_matches = re.findall(META_LYRICS_PAT, self.metastring)
         lyrics = []
         for match in lyrics_matches:
             lyrics.append(json.loads(match)["text"])
@@ -210,11 +212,12 @@ class Metaguru:
         return TrackInfo(
             self.album,
             self.url,
-            length=self.standalone_track_duration(),
+            length=floor(self.raw_tracks[0]["duration_secs"])
+            if self.raw_tracks
+            else None,
             artist=self.artist,
             artist_id=self.url,
             data_url=self.url,
-            label=self.label,
             **self.COMMON,
         )
 
@@ -229,20 +232,26 @@ class Metaguru:
         )
 
     @property
-    def trackinfos(self) -> List[TrackInfo]:
+    def tracks(self) -> List[TrackInfo]:
         # track_alt=track["track_alt"],
-        return [self._trackinfo(track, idx) for idx, track in enumerate(self.tracks, 1)]
+        return [
+            self._trackinfo(track, idx) for idx, track in enumerate(self.raw_tracks, 1)
+        ]
 
-    def albuminfo(self) -> AlbumInfo:
+    @property
+    def albuminfo(self) -> Optional[AlbumInfo]:
+        if self.type == "song":
+            return None
+
         return AlbumInfo(
             self.album,
             self.url,
             self.artist,
             self.url,
-            self.trackinfos,
-            year=self.release_date.year,
-            month=self.release_date.month,
-            day=self.release_date.day,
+            self.tracks,
+            year=self.release_date.year if self.release_date else None,
+            month=self.release_date.month if self.release_date else None,
+            day=self.release_date.day if self.release_date else None,
             label=self.label,
             country=WORLDWIDE,
             data_url=self.url,
@@ -374,7 +383,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         html = self._get(url)
         if not html:
             return None
-        return Metaguru(html, url).albuminfo()
+        return Metaguru(html, url).albuminfo
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
