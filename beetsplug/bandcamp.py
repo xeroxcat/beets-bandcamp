@@ -60,7 +60,8 @@ BANDCAMP = "bandcamp"
 META_DATE_PAT = r'"release_date":"([^"]*)"'
 META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
 META_LYRICS_PAT = r'"lyrics":({[^}]*})'
-META_STANDALONE_DUR_PAT = r'"duration_secs":(\d+.\d+)'
+META_STANDALONE_DUR_PAT = r'"duration_secs":([^,]*)'
+META_MULTI_DUR_PAT = r'{*duration_secs({[^{]*}.*)*}'
 
 META_DATE_FORMAT = "%d %b %Y"
 
@@ -158,17 +159,22 @@ class Metaguru:
 
         return self._release_date
 
+    def _find_durations(self, pattern: str) -> List[JSONDict]:
+        match = re.findall(pattern, self.metastring)
+
+    @property
+    def single_raw_track(self) -> JSONDict:
+        if self._raw_tracks or self._raw_tracks is None:
+            return self._raw_tracks
+
+        match = re.findall(META_STANDALONE_DUR_PAT, self.metastring)
+
     @property
     def raw_tracks(self) -> List[JSONDict]:
         """Some 'meta' list members contain tags (see above), but the most useful
-        lies in index 4 (as it stands). It's a huge, barely accessible json string
-        which contains more or less all we need, including the track information.
-          {'duration_secs': 128.0,
-           'name': 'Engann veginn nettur',
-           'url': 'https://bbbbbbrecors.bandcamp.com/track/engann-veginn-nettur',
-           'duration': 'P00H02M08S',
-           '@id': 'https://bbbbbbrecors.bandcamp.com/track/engann-veginn-nettur',
-           '@type': ['MusicRecording']},
+        lies in index 4 or 5 (as it stands). It's a huge, barely accessible json string
+        which contains more or less all we need, including the track information,
+        like `duration_secs`, `url` and `name`.
         """
         if self._raw_tracks or self._raw_tracks is None:
             return self._raw_tracks
@@ -212,7 +218,7 @@ class Metaguru:
         return TrackInfo(
             self.album,
             self.url,
-            length=floor(self.raw_tracks[0]["duration_secs"])
+            length=floor(self.single_raw_track["duration_secs"])
             if self.raw_tracks
             else None,
             artist=self.artist,
