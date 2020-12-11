@@ -61,7 +61,7 @@ META_DATE_PAT = r'"release_date":"([^"]*)"'
 META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
 META_LYRICS_PAT = r'"lyrics":({[^}]*})'
 META_STANDALONE_DUR_PAT = r'"duration_secs":([^,]*)'
-META_MULTI_DUR_PAT = r'{*duration_secs({[^{]*}.*)*}'
+META_MULTI_DUR_PAT = r'{[^}{]*duration_secs[^}]*}'
 
 META_DATE_FORMAT = "%d %b %Y"
 
@@ -91,7 +91,7 @@ class Metaguru:
         self.metasoup = partial(self.soup.find, name="meta")
         self.url = url
         self._propermap = dict()
-        self._raw_tracks = []
+        self._raw_tracks = list()
 
     def _property(self, name: str) -> Optional[str]:
         """Expects to find
@@ -159,15 +159,11 @@ class Metaguru:
 
         return self._release_date
 
-    def _find_durations(self, pattern: str) -> List[JSONDict]:
-        match = re.findall(pattern, self.metastring)
-
-    @property
-    def single_raw_track(self) -> JSONDict:
-        if self._raw_tracks or self._raw_tracks is None:
-            return self._raw_tracks
-
-        match = re.findall(META_STANDALONE_DUR_PAT, self.metastring)
+    def _single_raw_track_duration(self) -> Optional[float]:
+        match = re.search(META_STANDALONE_DUR_PAT, self.metastring)
+        if match:
+            return float(match.groups()[0])
+        return None
 
     @property
     def raw_tracks(self) -> List[JSONDict]:
@@ -179,18 +175,13 @@ class Metaguru:
         if self._raw_tracks or self._raw_tracks is None:
             return self._raw_tracks
 
-        match = re.findall(r'{[^}{]*duration_secs({[^{]*}.*)*}', self.metastring)
-        print(len(match))
+        match = re.findall(META_MULTI_DUR_PAT, self.metastring)
         added = set()
         for a in match:
-            print(a)
-            track = json.loads(a)
+            track = json.loads(a.encode())
             if track["@id"] not in added:
                 self._raw_tracks.append(track)
                 added.add(track["@id"])
-
-        from pprint import pprint
-        pprint(self._raw_tracks)
         return self._raw_tracks
 
     def track_artist(self, track_title: str) -> str:
@@ -218,9 +209,7 @@ class Metaguru:
         return TrackInfo(
             self.album,
             self.url,
-            length=floor(self.single_raw_track["duration_secs"])
-            if self.raw_tracks
-            else None,
+            length=floor(self._single_raw_track_duration()),
             artist=self.artist,
             artist_id=self.url,
             data_url=self.url,
@@ -228,11 +217,11 @@ class Metaguru:
         )
 
     def _trackinfo(self, track: JSONDict, index: int) -> TrackInfo:
-        TrackInfo(
+        return TrackInfo(
             track["name"],
             track["url"],
             index=index,
-            length=track["duration_secs"],
+            length=floor(track["duration_secs"]),
             data_url=track["url"],
             artist=self.track_artist(track["name"]),
         )

@@ -27,7 +27,6 @@ def test_parse_single_track(single_track_soup) -> None:
     assert guru.label == expected.label
     assert guru.description == expected.description
     assert guru.release_date == expected.release_date
-    assert len(guru.raw_tracks) == expected.track_count
     assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
     if not expected.albuminfo:
         assert not guru.albuminfo
@@ -35,8 +34,8 @@ def test_parse_single_track(single_track_soup) -> None:
         assert vars(guru.albuminfo) == vars(expected.albuminfo)
 
 
-def test_parse_album(album_soup) -> None:
-    soup, url, expected = album_soup
+def test_parse_album_or_comp(album_comp_soup) -> None:
+    soup, url, expected = album_comp_soup
     guru = Metaguru(soup, url)
 
     assert guru.title == expected.title
@@ -48,8 +47,10 @@ def test_parse_album(album_soup) -> None:
     assert guru.description == expected.description
     assert guru.release_date == expected.release_date
     assert len(guru.raw_tracks) == expected.track_count
-    assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
-    if not expected.albuminfo:
-        assert not guru.albuminfo
-    else:
-        assert vars(guru.albuminfo) == vars(expected.albuminfo)
+    # assert guru.standalone_trackinfo is None
+    for track, expected_track in zip(guru.albuminfo.tracks, expected.albuminfo.tracks):
+        assert vars(track) == vars(expected_track)
+
+    for key in vars(expected.albuminfo).keys():
+        if key != "tracks":
+            assert getattr(guru.albuminfo, key) == getattr(expected.albuminfo, key)

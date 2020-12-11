@@ -36,7 +36,7 @@ def Pot() -> "partial[BeautifulSoup]":
 def single_track_soup(Pot) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
     test_html_file = "tests/single.html"
     url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
-    info = ReleaseInfo(
+    info = ReleaseInfo(  # expected
         **{
             "title": "Matriark - Arangel, by Megatech",
             "type": "song",
@@ -63,7 +63,6 @@ def single_track_soup(Pot) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
     return (Pot(codecs.open(test_html_file, "r", "utf-8").read()), url, info)
 
 
-@pytest.fixture
 def album_soup(Pot) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
     test_html_file = "tests/album.html"
     url = "https://ute-rec.bandcamp.com/album/ute004"
@@ -80,23 +79,114 @@ def album_soup(Pot) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
             "track_count": 4,
         }
     )
+    tracks = [
+        TrackInfo(
+            "The Human Experience (Empathy Mix)",
+            "https://ute-rec.bandcamp.com/track/the-human-experience-empathy-mix",
+            index=1,
+            length=504,
+            data_url="https://ute-rec.bandcamp.com/track/the-human-experience-empathy-mix",
+            artist=info.artist,
+        ),
+        TrackInfo(
+            "Parallell",
+            "https://ute-rec.bandcamp.com/track/parallell",
+            index=2,
+            length=487,
+            data_url="https://ute-rec.bandcamp.com/track/parallell",
+            artist=info.artist,
+        ),
+        TrackInfo(
+            "Formulae",
+            "https://ute-rec.bandcamp.com/track/formulae",
+            index=3,
+            length=431,
+            data_url="https://ute-rec.bandcamp.com/track/formulae",
+            artist=info.artist,
+        ),
+        TrackInfo(
+            "Biotope",
+            "https://ute-rec.bandcamp.com/track/biotope",
+            index=4,
+            length=421,
+            data_url="https://ute-rec.bandcamp.com/track/biotope",
+            artist=info.artist,
+        ),
+    ]
+    info.albuminfo = AlbumInfo(
+        info.album,
+        url,
+        info.artist,
+        url,
+        tracks,
+        data_url=url,
+        year=info.release_date.year,
+        month=info.release_date.month,
+        day=info.release_date.day,
+        label=info.label,
+        data_source="bandcamp",
+        media="Digital Media",
+        country="XW",
+        )
     return (Pot(codecs.open(test_html_file, "r", "utf-8").read()), url, info)
 
-    # info.albuminfo = AlbumInfo(
-    #     info.album,
-    #     url,
-    #     info.artist,
-    #     url,
-    #     [info.standalone_trackinfo],
-    #     data_url=url,
-    #     year=2020,
-    #     month=11,
-    #     day=9,
-    #     label=info.label,
-    #     data_source="bandcamp",
-    #     media="Digital Media",
-    #     country="XW",
-    #     )
+def compilation_soup(Pot) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+    test_html_file = "tests/compilation.html"
+    url = "https://ismusberlin.bandcamp.com/album/ismva0033"
+    info = ReleaseInfo(
+        **{
+            "title": "ISMVA003.3, by Ismus",
+            "type": "album",
+            "image": "https://f4.bcbits.com/img/a4292881830_5.jpg",
+            "album": "ISMVA003.3",
+            "artist": "Ismus",
+            "label": "Ismus",
+            "description": "13 track album",
+            "release_date": date(2020, 11, 29),
+            "track_count": 13,
+        }
+    )
+    tracks = [  # checking the first two will suffice
+        TrackInfo(
+            "Zebar & Zimo - Wish Granter (Original Mix)",
+            "https://ismusberlin.bandcamp.com/track/zebar-zimo-wish-granter-original-mix",
+            index=1,
+            length=414,
+            data_url="https://ismusberlin.bandcamp.com/track/zebar-zimo-wish-granter-original-mix",
+            artist="Zebar & Zimo",
+        ),
+        TrackInfo(
+            "Alpha Tracks - Valimba (Original Mix)",
+            "https://ismusberlin.bandcamp.com/track/alpha-tracks-valimba-original-mix",
+            index=2,
+            length=361,
+            data_url="https://ismusberlin.bandcamp.com/track/alpha-tracks-valimba-original-mix",
+            artist="Alpha Tracks",
+        ),
+    ]
+
+    info.standalone_trackinfo = None
+    info.albuminfo = AlbumInfo(
+        info.album,
+        url,
+        info.artist,
+        url,
+        tracks,
+        data_url=url,
+        year=info.release_date.year,
+        month=info.release_date.month,
+        day=info.release_date.day,
+        label=info.label,
+        data_source="bandcamp",
+        media="Digital Media",
+        country="XW",
+    )
+    return (Pot(codecs.open(test_html_file, "r", "utf-8").read()), url, info)
+
+
+@pytest.fixture(params=[album_soup, compilation_soup])
+def album_comp_soup(request, Pot):
+    yield request.param(Pot)
 
 
 # One track release: "https://mega-tech.bandcamp.com/track/matriark-arangel"
