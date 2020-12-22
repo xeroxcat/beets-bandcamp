@@ -385,7 +385,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         html = self._get(url)
         if not html:
             return None
-        return Metaguru(html, url).standalone_trackinfo()
+        return Metaguru(html, url).standalone_trackinfo
 
     def _search(self, query, search_type=ALBUM, page=1):
         # type: (str, str, int) -> List[str]
