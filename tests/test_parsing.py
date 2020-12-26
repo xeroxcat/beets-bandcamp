@@ -1,17 +1,38 @@
-from functools import partial
-
 from beetsplug.bandcamp import Metaguru
 
 MAIN_FIELDS = [
-    "title",
     "type",
     "image",
     "album",
-    "artist",
+    "album_artist",
     "label",
-    "description",
     "release_date",
 ]
+
+TRACK_FIELDS = {
+    # "arranger",
+    "artist",
+    # TODO: "artist_credit",
+    # TODO: "artist_id",
+    # TODO: "artist_sort",
+    # "composer",
+    # "composer_sort",
+    # TODO: "data_source",
+    "data_url",
+    # "disctitle",
+    "index",
+    "length",
+    # "lyricist",
+    # TODO: "media",
+    # "medium",
+    # "medium_index",
+    # "medium_total",
+    # "release_track_id",
+    "title",
+    # TODO: "track_alt",
+    "track_id",
+}
+
 
 ALBUM_FIELDS = [
     "album",
@@ -46,19 +67,9 @@ ALBUM_FIELDS = [
 ]
 
 
-def test_init(single_track_release_soup) -> None:
-    soup, url, _ = single_track_release_soup
-
-    guru = Metaguru(soup, url)
-
-    assert guru.soup == soup
-    assert isinstance(guru.metasoup, partial)
-    assert guru.url == url
-
-
 def test_parse_single_track_release(single_track_release_soup) -> None:
-    soup, url, expected = single_track_release_soup
-    guru = Metaguru(soup, url)
+    html, expected = single_track_release_soup
+    guru = Metaguru(html)
 
     for field in MAIN_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
@@ -67,8 +78,8 @@ def test_parse_single_track_release(single_track_release_soup) -> None:
 
 
 def test_parse_album_or_comp(multitracks_soup) -> None:
-    soup, url, expected = multitracks_soup
-    guru = Metaguru(soup, url)
+    html, expected = multitracks_soup
+    guru = Metaguru(html)
 
     for field in MAIN_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)

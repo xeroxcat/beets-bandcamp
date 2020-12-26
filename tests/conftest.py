@@ -2,12 +2,10 @@
 import codecs
 from dataclasses import dataclass
 from datetime import date
-from functools import partial
-from typing import Callable, List, Tuple
+from typing import List, Tuple
 
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
-from bs4 import BeautifulSoup
 
 from beetsplug.bandcamp import COUNTRY, DATA_SOURCE, MEDIA
 
@@ -16,13 +14,11 @@ from beetsplug.bandcamp import COUNTRY, DATA_SOURCE, MEDIA
 
 @dataclass
 class ReleaseInfo:
-    title: str  # <album>, <label>
     type: str  # song or album
     image: str  # url
     album: str  # <artist> - <single>
-    artist: str
+    album_artist: str
     label: str
-    description: str
     release_date: date
     track_count: int
     standalone_trackinfo = None  # type: TrackInfo
@@ -47,7 +43,7 @@ class ReleaseInfo:
         self._albuminfo = AlbumInfo(
             self.album,
             url,
-            self.artist,
+            self.album_artist,
             url,  # TODO: check mb instead
             trackinfos,
             data_url=url,
@@ -61,23 +57,17 @@ class ReleaseInfo:
         )
 
 
-def pot() -> Callable[..., BeautifulSoup]:
-    return partial(BeautifulSoup, features="html.parser")
-
-
 @pytest.fixture
-def single_track_release_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+def single_track_release_soup() -> Tuple[str, ReleaseInfo]:
     test_html_file = "tests/single.html"
     url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
     info = ReleaseInfo(  # expected
         **{
-            "title": "Matriark - Arangel, by Megatech",
-            "type": "song",
-            "image": "https://f4.bcbits.com/img/a2036476476_5.jpg",
+            "type": "MusicRecording, Product",
+            "image": "https://f4.bcbits.com/img/a2036476476_10.jpg",
             "album": "Matriark - Arangel",
-            "artist": "Megatech",
+            "album_artist": "Megatech",
             "label": "Megatech",
-            "description": " track by Megatech ",
             "release_date": date(2020, 11, 9),
             "track_count": 1,
         }
@@ -86,98 +76,81 @@ def single_track_release_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
         info.album,
         url,
         length=421,
-        artist=info.artist,
+        artist=info.album_artist,
         artist_id=url,
         data_url=url,
         data_source=DATA_SOURCE,
         media=MEDIA,
     )
-    return (
-        BeautifulSoup(codecs.open(test_html_file, "r", "utf-8").read(), "html.parser"),
-        url,
-        info,
-    )
+    return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def single_track_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+def single_track_soup() -> Tuple[str, ReleaseInfo]:
     test_html_file = "tests/single_track.html"
-    url = "https://sinensis-ute.bandcamp.com/track/live-at-parken"
+    # url = "https://sinensis-ute.bandcamp.com/track/live-at-parken"
+    album_url = "https://sinensis-ute.bandcamp.com/album/sine03"
+    album_artist = "Alpha Tracks"
     info = ReleaseInfo(  # expected
         **{
-            "title": "SINE03, by Alpha Tracks",
-            "type": "album",
-            "image": "https://f4.bcbits.com/img/a0610664056_5.jpg",
+            "type": "MusicAlbum",
+            "image": "https://f4.bcbits.com/img/a0610664056_10.jpg",
             "album": "SINE03",
-            "artist": "Alpha Tracks",
+            "album_artist": album_artist,
             "label": "Sinensis",
-            "description": "2 track album",
             "release_date": date(2020, 6, 16),
             "track_count": 2,
         }
     )
     turl = "https://sinensis-ute.bandcamp.com/track"
-    artist = "Alpha Tracks"
     tracks = [
-        (f"{turl}/live-at-parken", artist, "Live At PARKEN", 3600),
-        (f"{turl}/odondo", artist, "Odondo", 371),
+        (f"{turl}/live-at-parken", album_artist, "Live At PARKEN", 3600),
+        (f"{turl}/odondo", album_artist, "Odondo", 371),
     ]
-    info.set_albuminfo(url, tracks)
-    return (
-        BeautifulSoup(codecs.open(test_html_file, "r", "utf-8").read(), "html.parser"),
-        url,
-        info,
-    )
+    info.set_albuminfo(album_url, tracks)
+    return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def album_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+def album_soup() -> Tuple[str, ReleaseInfo]:
     test_html_file = "tests/album.html"
     url = "https://ute-rec.bandcamp.com/album/ute004"
+    album_artist = "Mikkel Rev"
     info = ReleaseInfo(
         **{
-            "title": "UTE004, by Mikkel Rev",
-            "type": "album",
-            "image": "https://f4.bcbits.com/img/a1035657740_5.jpg",
+            "type": "MusicAlbum",
+            "image": "https://f4.bcbits.com/img/a1035657740_10.jpg",
             "album": "UTE004",
-            "artist": "Mikkel Rev",
+            "album_artist": album_artist,
             "label": "Ute.Rec",
-            "description": "4 track album",
             "release_date": date(2020, 7, 17),
             "track_count": 4,
         }
     )
     turl = "https://ute-rec.bandcamp.com/track"
-    artist = "Mikkel Rev"
     tracks = [
         (
             f"{turl}/the-human-experience-empathy-mix",
-            artist,
+            album_artist,
             "The Human Experience (Empathy Mix)",
             504,
         ),
-        (f"{turl}/parallell", artist, "Parallell", 487),
-        (f"{turl}/formulae", artist, "Formulae", 431),
-        (f"{turl}/biotope", artist, "Biotope", 421),
+        (f"{turl}/parallell", album_artist, "Parallell", 487),
+        (f"{turl}/formulae", album_artist, "Formulae", 431),
+        (f"{turl}/biotope", album_artist, "Biotope", 421),
     ]
     info.set_albuminfo(url, tracks)
-    return (
-        BeautifulSoup(codecs.open(test_html_file, "r", "utf-8").read(), "html.parser"),
-        url,
-        info,
-    )
+    return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def compilation_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+def compilation_soup() -> Tuple[str, ReleaseInfo]:
     test_html_file = "tests/compilation.html"
     url = "https://ismusberlin.bandcamp.com/album/ismva0033"
     info = ReleaseInfo(
         **{
-            "title": "ISMVA003.3, by Ismus",
-            "type": "album",
-            "image": "https://f4.bcbits.com/img/a4292881830_5.jpg",
+            "type": "MusicAlbum",
+            "image": "https://f4.bcbits.com/img/a4292881830_10.jpg",
             "album": "ISMVA003.3",
-            "artist": "Ismus",
+            "album_artist": "Ismus",
             "label": "Ismus",
-            "description": "13 track album",
             "release_date": date(2020, 11, 29),
             "track_count": 13,
         }
@@ -198,15 +171,11 @@ def compilation_soup() -> Tuple[BeautifulSoup, str, ReleaseInfo]:
         ),
     ]
     info.set_albuminfo(url, tracks)
-    return (
-        BeautifulSoup(codecs.open(test_html_file, "r", "utf-8").read(), "html.parser"),
-        url,
-        info,
-    )
+    return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
 @pytest.fixture(params=[single_track_soup, album_soup, compilation_soup])
-def multitracks_soup(request) -> Tuple[BeautifulSoup, str, ReleaseInfo]:
+def multitracks_soup(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
 
 

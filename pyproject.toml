@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beets-bandcamp"
-version = "0.2.0-a0"
+version = "0.2.0"
 description = "Plugin for beets (http://beets.io) to use bandcamp as an autotagger source."
 authors = ["Ariel George <unarbolito@gmail.com>", "Šarūnas Nejus <snejus@pm.me>"]
 readme = "README.rst"
@@ -15,7 +15,6 @@ include = ["README.rst"]
 python = "^3.6"
 
 dataclasses = "*"
-beautifulsoup4 = "*"
 beets = ">=1.4.6"
 requests = "*"
 six = ">=1.9"
@@ -26,24 +25,6 @@ coverage = "^5.3"
 pytest-cov = "^2.10.1"
 mypy = "^0.790"
 flake8 = "^3.8.4"
-
-[tool.coverage.run]
-branch = true
-dynamic_context = "test_function"
-source = ["beetsplug"]
-
-[tool.coverage.report]
-precision = 2
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING",
-    "if typing.TYPE_CHECKING",
-    "raise AssertionError",
-    "raise NotImplementedError"
-]
-
-[tool.coverage.html]
-show_contexts = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
