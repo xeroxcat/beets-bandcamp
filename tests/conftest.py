@@ -58,7 +58,8 @@ class ReleaseInfo:
 
 
 @pytest.fixture
-def single_track_release_soup() -> Tuple[str, ReleaseInfo]:
+def single_track_release() -> Tuple[str, ReleaseInfo]:
+    """Single track as a release on its own."""
     test_html_file = "tests/single.html"
     url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
     info = ReleaseInfo(  # expected
@@ -85,9 +86,9 @@ def single_track_release_soup() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def single_track_soup() -> Tuple[str, ReleaseInfo]:
+def single_track() -> Tuple[str, ReleaseInfo]:
+    """Single track which is part of an album release."""
     test_html_file = "tests/single_track.html"
-    # url = "https://sinensis-ute.bandcamp.com/track/live-at-parken"
     album_url = "https://sinensis-ute.bandcamp.com/album/sine03"
     album_artist = "Alpha Tracks"
     info = ReleaseInfo(  # expected
@@ -110,7 +111,8 @@ def single_track_soup() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def album_soup() -> Tuple[str, ReleaseInfo]:
+def album() -> Tuple[str, ReleaseInfo]:
+    """An album with a single artist."""
     test_html_file = "tests/album.html"
     url = "https://ute-rec.bandcamp.com/album/ute004"
     album_artist = "Mikkel Rev"
@@ -141,7 +143,8 @@ def album_soup() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def compilation_soup() -> Tuple[str, ReleaseInfo]:
+def compilation() -> Tuple[str, ReleaseInfo]:
+    """An album with various artists."""
     test_html_file = "tests/compilation.html"
     url = "https://ismusberlin.bandcamp.com/album/ismva0033"
     info = ReleaseInfo(
@@ -174,7 +177,7 @@ def compilation_soup() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-@pytest.fixture(params=[single_track_soup, album_soup, compilation_soup])
+@pytest.fixture(params=[single_track, album, compilation])
 def multitracks_soup(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
 

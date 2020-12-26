@@ -14,17 +14,15 @@ include = ["LICENSE", "README.rst"]
 [tool.poetry.dependencies]
 python = "^3.6"
 
-dataclasses = "*"
 beets = ">=1.4.6"
 requests = "*"
-six = ">=1.9"
 
 [tool.poetry.dev-dependencies]
-pytest = "*"
-coverage = "^5.3"
-pytest-cov = "^2.10.1"
-mypy = "^0.790"
-flake8 = "^3.8.4"
+dataclasses = "*"
+flake8 = ">=3.8.4"
+mypy = ">=0.790"
+pytest = ">=6.2"
+pytest-cov = ">=2.10.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

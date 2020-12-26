@@ -99,7 +99,7 @@ toml = ["toml"]
 name = "dataclasses"
 version = "0.6"
 description = "A backport of the dataclasses module for Python 3.6"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -401,7 +401,7 @@ testing = ["pytest (>=3.5,!=3.7.3)", "pytest-checkdocs (>=1.2.3)", "pytest-flake
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6"
-content-hash = "f329af8153c45eb9f6f3d90139924046dafe4af92c56de54e946eb03655f6dc4"
+content-hash = "8dc7923b3d563dd63752629dd0c344cc79d51d496fbd02a6410b3e8d083a4376"
 
 [metadata.files]
 atomicwrites = [
