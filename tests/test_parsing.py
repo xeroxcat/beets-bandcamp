@@ -1,8 +1,49 @@
 from functools import partial
 
-import pytest
-
 from beetsplug.bandcamp import Metaguru
+
+MAIN_FIELDS = [
+    "title",
+    "type",
+    "image",
+    "album",
+    "artist",
+    "label",
+    "description",
+    "release_date",
+]
+
+ALBUM_FIELDS = [
+    "album",
+    "album_id",
+    "artist",
+    "artist_id",
+    "tracks",
+    # "asin",
+    # "albumtype",
+    # TODO: "va",
+    "year",
+    "month",
+    "day",
+    "label",
+    # "mediums",
+    # "artist_sort",
+    # "releasegroup_id",
+    # TODO: "catalognum",
+    # "script",
+    # "language",
+    "country",
+    # TODO: "albumstatus",
+    "media",
+    # "albumdisambig",
+    # "releasegroupdisambig",
+    # "artist_credit",
+    # "original_year",
+    # "original_month",
+    # "original_day",
+    "data_source",  # bandcamp
+    "data_url",
+]
 
 
 def test_init(single_track_soup) -> None:
@@ -19,38 +60,33 @@ def test_parse_single_track(single_track_soup) -> None:
     soup, url, expected = single_track_soup
     guru = Metaguru(soup, url)
 
-    assert guru.title == expected.title
-    assert guru.type == expected.type
-    assert guru.image == expected.image
-    assert guru.album == expected.album
-    assert guru.artist == expected.artist
-    assert guru.label == expected.label
-    assert guru.description == expected.description
-    assert guru.release_date == expected.release_date
+    for field in MAIN_FIELDS:
+        assert getattr(guru, field) == getattr(expected, field)
+
     assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
-    if not expected.albuminfo:
-        assert not guru.albuminfo
-    else:
-        assert vars(guru.albuminfo) == vars(expected.albuminfo)
 
 
-def test_parse_album_or_comp(album_comp_soup) -> None:
-    soup, url, expected = album_comp_soup
+def test_parse_album_or_comp(multitracks_soup) -> None:
+    soup, url, expected = multitracks_soup
     guru = Metaguru(soup, url)
 
-    assert guru.title == expected.title
-    assert guru.type == expected.type
-    assert guru.image == expected.image
-    assert guru.album == expected.album
-    assert guru.artist == expected.artist
-    assert guru.label == expected.label
-    assert guru.description == expected.description
-    assert guru.release_date == expected.release_date
-    assert len(guru.raw_tracks) == expected.track_count
-    # assert guru.standalone_trackinfo is None
-    for track, expected_track in zip(guru.albuminfo.tracks, expected.albuminfo.tracks):
-        assert vars(track) == vars(expected_track)
+    for field in MAIN_FIELDS:
+        assert getattr(guru, field) == getattr(expected, field)
 
-    for key in vars(expected.albuminfo).keys():
-        if key != "tracks":
-            assert getattr(guru.albuminfo, key) == getattr(expected.albuminfo, key)
+    assert len(guru.raw_tracks) == expected.track_count
+    assert guru.standalone_trackinfo is None
+
+    if not expected.albuminfo:
+        assert not guru.albuminfo
+        return
+
+    for field in ALBUM_FIELDS:
+        if field == "tracks":
+            assert hasattr(guru.albuminfo, "tracks")
+
+            expected.albuminfo.tracks.sort(key=lambda t: t.index)
+            guru.albuminfo.tracks.sort(key=lambda t: t.index)
+            for n, expected_track in enumerate(expected.albuminfo.tracks):
+                assert vars(guru.albuminfo.tracks[n]) == vars(expected_track)
+        else:
+            assert getattr(guru.albuminfo, field) == getattr(expected.albuminfo, field)

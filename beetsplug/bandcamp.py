@@ -48,17 +48,16 @@ DEFAULT_CONFIG = {
 }
 
 USER_AGENT = "beets/{0} +http://beets.radbox.org/".format(beets.__version__)
-BANDCAMP_SEARCH = "http://bandcamp.com/search?q={query}&page={page}"
+SEARCH_URL = "https://bandcamp.com/search?q={query}&page={page}"
 ALBUM = "album"
 ARTIST = "band"
 TRACK = "track"
 
-WORLDWIDE = "XW"
-DIGITAL_MEDIA = "Digital Media"
-BANDCAMP = "bandcamp"
+COUNTRY = "XW"
+MEDIA = "Digital Media"
+DATA_SOURCE = "bandcamp"
 
 META_DATE_PAT = r'"release_date":"([^"]*)"'
-META_TRACK_ITEM_PAT = r'"item":({[^}]*})'
 META_LYRICS_PAT = r'"lyrics":({[^}]*})'
 META_STANDALONE_DUR_PAT = r'"duration_secs":([^,]*)'
 META_MULTI_DUR_PAT = r'{[^}{]*duration_secs[^}]*}'
@@ -72,7 +71,7 @@ class Metaguru:
     ALBUM_SPLIT = ", by "
     TRACK_SPLIT = " - "
 
-    COMMON = {"data_source": BANDCAMP, "media": DIGITAL_MEDIA}
+    COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
 
     _album = None  # type: str
     _artist = None  # type: str
@@ -159,11 +158,12 @@ class Metaguru:
 
         return self._release_date
 
-    def _single_raw_track_duration(self) -> Optional[float]:
-        match = re.search(META_STANDALONE_DUR_PAT, self.metastring)
-        if match:
+    def _single_raw_track_duration(self) -> float:
+        try:
+            match = re.search(META_STANDALONE_DUR_PAT, self.metastring)
             return float(match.groups()[0])
-        return None
+        except AttributeError:
+            return None
 
     @property
     def raw_tracks(self) -> List[JSONDict]:
@@ -206,6 +206,9 @@ class Metaguru:
 
     @property
     def standalone_trackinfo(self) -> TrackInfo:
+        if self.type != "song":
+            return None
+
         return TrackInfo(
             self.album,
             self.url,
@@ -234,10 +237,7 @@ class Metaguru:
         ]
 
     @property
-    def albuminfo(self) -> Optional[AlbumInfo]:
-        if self.type == "song":
-            return None
-
+    def albuminfo(self) -> AlbumInfo:
         return AlbumInfo(
             self.album,
             self.url,
@@ -248,7 +248,7 @@ class Metaguru:
             month=self.release_date.month if self.release_date else None,
             day=self.release_date.day if self.release_date else None,
             label=self.label,
-            country=WORLDWIDE,
+            country=COUNTRY,
             data_url=self.url,
             **self.COMMON,
         )
@@ -283,7 +283,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         self.register_listener("pluginload", self.loaded)
 
     def _from_bandcamp(self, item: Any) -> bool:
-        return hasattr(item, "data_source") and item.data_source == BANDCAMP
+        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
 
     def imported(self, _: Any, task: Any) -> None:
         """Import hook for fetching lyrics from bandcamp automatically."""
@@ -303,8 +303,8 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
                     plugin.sources = [
                         BandcampAlbumArt(plugin._log, self.config)
                     ] + plugin.sources
-                    fetchart.ART_SOURCES[BANDCAMP] = BandcampAlbumArt
-                    fetchart.SOURCE_NAMES[BandcampAlbumArt] = BANDCAMP
+                    fetchart.ART_SOURCES[DATA_SOURCE] = BandcampAlbumArt
+                    fetchart.SOURCE_NAMES[BandcampAlbumArt] = DATA_SOURCE
                     break
 
     def add_lyrics(self, item: Any, write: bool = False) -> None:
@@ -402,7 +402,7 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         # the users can choose the 'max_candidates' number.
         while len(urls) < self.config["min_candidates"].as_number():
             self._report("Searching {}, page {}".format(search_type, page))
-            results = self._get(BANDCAMP_SEARCH.format(query=query, page=page))
+            results = self._get(SEARCH_URL.format(query=query, page=page))
             if not results:
                 continue
 
@@ -430,7 +430,7 @@ class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
         This only returns cover art urls for bandcamp albums (by id).
         """
         url = album.mb_albumid
-        if not isinstance(url, six.string_types) or BANDCAMP not in url:
+        if not isinstance(url, six.string_types) or DATA_SOURCE not in url:
             return None
 
         html = self._get(url)
