@@ -27,7 +27,7 @@ ALBUM_FIELDS = [
     "day",
     "label",
     # "mediums",
-    # "artist_sort",
+    # TODO: "artist_sort",
     # "releasegroup_id",
     # TODO: "catalognum",
     # "script",
@@ -37,7 +37,7 @@ ALBUM_FIELDS = [
     "media",
     # "albumdisambig",
     # "releasegroupdisambig",
-    # "artist_credit",
+    # TODO: "artist_credit",
     # "original_year",
     # "original_month",
     # "original_day",
@@ -46,8 +46,8 @@ ALBUM_FIELDS = [
 ]
 
 
-def test_init(single_track_soup) -> None:
-    soup, url, _ = single_track_soup
+def test_init(single_track_release_soup) -> None:
+    soup, url, _ = single_track_release_soup
 
     guru = Metaguru(soup, url)
 
@@ -56,8 +56,8 @@ def test_init(single_track_soup) -> None:
     assert guru.url == url
 
 
-def test_parse_single_track(single_track_soup) -> None:
-    soup, url, expected = single_track_soup
+def test_parse_single_track_release(single_track_release_soup) -> None:
+    soup, url, expected = single_track_release_soup
     guru = Metaguru(soup, url)
 
     for field in MAIN_FIELDS:

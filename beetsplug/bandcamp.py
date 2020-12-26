@@ -69,7 +69,7 @@ JSONDict = Dict[str, Any]
 
 class Metaguru:
     ALBUM_SPLIT = ", by "
-    TRACK_SPLIT = " - "
+    TRACK_SPLIT = "-"
 
     COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
 
@@ -184,11 +184,6 @@ class Metaguru:
                 added.add(track["@id"])
         return self._raw_tracks
 
-    def track_artist(self, track_title: str) -> str:
-        if self.TRACK_SPLIT in track_title:
-            return track_title.split(self.TRACK_SPLIT, maxsplit=1)[0]
-        return self.artist
-
     @property
     def lyrics(self) -> Optional[str]:
         if self._lyrics or self._lyrics is None:
@@ -220,13 +215,19 @@ class Metaguru:
         )
 
     def _trackinfo(self, track: JSONDict, index: int) -> TrackInfo:
+        # TODO: Check for VA too
+        artist = self.artist
+        title = track["name"]
+        if self.TRACK_SPLIT in title:
+            artist, title = [s.strip() for s in title.split(self.TRACK_SPLIT, maxsplit=1)]
+
         return TrackInfo(
-            track["name"],
+            title,
             track["url"],
             index=index,
             length=floor(track["duration_secs"]),
             data_url=track["url"],
-            artist=self.track_artist(track["name"]),
+            artist=artist,
         )
 
     @property
