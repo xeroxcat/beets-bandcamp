@@ -1,4 +1,6 @@
-from beetsplug.bandcamp import Metaguru
+import pytest
+
+from beetsplug.bandcamp import BandcampPlugin, Metaguru
 
 MAIN_FIELDS = [
     "type",
@@ -17,13 +19,13 @@ TRACK_FIELDS = {
     # TODO: "artist_sort",
     # "composer",
     # "composer_sort",
-    # TODO: "data_source",
+    "data_source",
     "data_url",
     # "disctitle",
     "index",
     "length",
     # "lyricist",
-    # TODO: "media",
+    "media",
     # "medium",
     # "medium_index",
     # "medium_total",
@@ -42,7 +44,7 @@ ALBUM_FIELDS = [
     "tracks",
     # "asin",
     # "albumtype",
-    # TODO: "va",
+    "va",
     "year",
     "month",
     "day",
@@ -67,8 +69,59 @@ ALBUM_FIELDS = [
 ]
 
 
-def test_parse_single_track_release(single_track_release_soup) -> None:
-    html, expected = single_track_release_soup
+@pytest.mark.need_connection
+def test_get_html():
+    """Check whether content is being returned."""
+    url = "https://ute-rec.bandcamp.com/album/ute004"
+    should_contain = "UTE004 by Mikkel Rev, released 17 July 2020"
+
+    plugin = BandcampPlugin()
+    html = plugin._get(url)
+
+    assert html
+    assert should_contain in html
+
+
+@pytest.mark.need_connection
+def test_return_none_for_gibberish():
+    """Check whether None is being returned."""
+    url = "https://ute-rec.bandcamp.com/somegibberish2113231"
+
+    plugin = BandcampPlugin()
+    html = plugin._get(url)
+
+    assert not html
+
+
+@pytest.mark.need_connection
+def test_search():
+    query = "matriark"
+    search_type = "track"
+    expect_to_find = "https://mega-tech.bandcamp.com/track/matriark-arangel"
+
+    plugin = BandcampPlugin()
+    urls = plugin._search(query, search_type)
+
+    assert expect_to_find in urls
+
+
+@pytest.mark.need_connection
+def test_get_single_track_album(single_track_release) -> None:
+    html, expected = single_track_release
+    expected_track = expected.standalone_trackinfo
+    url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
+
+    plugin = BandcampPlugin()
+    actual = plugin.get_track_info(url)
+
+    print(actual)
+    for field in TRACK_FIELDS:
+        assert getattr(actual, field) == getattr(expected_track, field)
+
+
+@pytest.mark.parsing
+def test_parse_single_track_release(single_track_release) -> None:
+    html, expected = single_track_release
     guru = Metaguru(html)
 
     for field in MAIN_FIELDS:
@@ -77,19 +130,15 @@ def test_parse_single_track_release(single_track_release_soup) -> None:
     assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
 
 
-def test_parse_album_or_comp(multitracks_soup) -> None:
-    html, expected = multitracks_soup
+@pytest.mark.parsing
+def test_parse_album_or_comp(multitracks) -> None:
+    html, expected = multitracks
     guru = Metaguru(html)
 
     for field in MAIN_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
 
-    assert len(guru.raw_tracks) == expected.track_count
-    assert guru.standalone_trackinfo is None
-
-    if not expected.albuminfo:
-        assert not guru.albuminfo
-        return
+    assert len(guru.tracks) == expected.track_count
 
     for field in ALBUM_FIELDS:
         if field == "tracks":

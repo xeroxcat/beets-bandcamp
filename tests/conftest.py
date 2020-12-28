@@ -20,6 +20,7 @@ class ReleaseInfo:
     album_artist: str
     label: str
     release_date: date
+    va: bool
     track_count: int
     standalone_trackinfo = None  # type: TrackInfo
     _albuminfo = None  # type: AlbumInfo
@@ -37,6 +38,8 @@ class ReleaseInfo:
                 length=length,
                 data_url=track_url,
                 artist=artist,
+                data_source=DATA_SOURCE,
+                media=MEDIA,
             )
             for index, (track_url, artist, title, length) in enumerate(tracks, 1)
         ]
@@ -51,6 +54,7 @@ class ReleaseInfo:
             month=self.release_date.month,
             day=self.release_date.day,
             label=self.label,
+            va=self.va,
             data_source=DATA_SOURCE,
             media=MEDIA,
             country=COUNTRY,
@@ -71,6 +75,7 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
             "label": "Megatech",
             "release_date": date(2020, 11, 9),
             "track_count": 1,
+            "va": False,
         }
     )
     info.standalone_trackinfo = TrackInfo(
@@ -100,6 +105,7 @@ def single_track() -> Tuple[str, ReleaseInfo]:
             "label": "Sinensis",
             "release_date": date(2020, 6, 16),
             "track_count": 2,
+            "va": False,
         }
     )
     turl = "https://sinensis-ute.bandcamp.com/track"
@@ -125,6 +131,7 @@ def album() -> Tuple[str, ReleaseInfo]:
             "label": "Ute.Rec",
             "release_date": date(2020, 7, 17),
             "track_count": 4,
+            "va": False,
         }
     )
     turl = "https://ute-rec.bandcamp.com/track"
@@ -156,6 +163,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
             "label": "Ismus",
             "release_date": date(2020, 11, 29),
             "track_count": 13,
+            "va": True,
         }
     )
     turl = "https://ismusberlin.bandcamp.com/track"
@@ -178,7 +186,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
 
 
 @pytest.fixture(params=[single_track, album, compilation])
-def multitracks_soup(request) -> Tuple[str, ReleaseInfo]:
+def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
 
 

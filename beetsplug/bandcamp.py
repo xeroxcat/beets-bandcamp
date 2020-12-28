@@ -22,7 +22,8 @@ import logging
 import re
 from datetime import date, datetime
 from math import floor
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from operator import truth
+from typing import Any, Dict, List, Optional, Sequence
 
 import beets
 import beets.ui
@@ -30,20 +31,22 @@ import requests
 import six
 from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
+from beets.library import Item
+from cached_property import cached_property
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
-DEFAULT_CONFIG = {
+JSONDict = Dict[str, Any]
+
+DEFAULT_CONFIG: JSONDict = {
     "source_weight": 0.5,
     "min_candidates": 5,
-    "max_candidates": 5,
     "lyrics": False,
     "art": False,
-    "split_artist_title": False,
 }
 
-SEARCH_URL = "https://bandcamp.com/search?q={query}&page={page}"
-SEARCH_ITEM_PAT = r'href="(https://[^/]*/{query}/[^?]*)'
+SEARCH_URL = "https://bandcamp.com/search?q={0}&page={1}"
+SEARCH_ITEM_PAT = 'href="(https://[^/]*/{0}/[^?]*)'
 USER_AGENT = "beets/{0} +http://beets.radbox.org/".format(beets.__version__)
 ALBUM = "album"
 ARTIST = "band"
@@ -52,6 +55,7 @@ TRACK = "track"
 COUNTRY = "XW"
 MEDIA = "Digital Media"
 DATA_SOURCE = "bandcamp"
+COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
 
 META_BLOCK_PAT = r".*datePublished.*"
 META_LYRICS_PAT = r'"lyrics":({[^}]*})'
@@ -61,128 +65,107 @@ META_DATE_FORMAT = "%d %B %Y"
 
 TRACK_SPLIT = "-"
 
-JSONDict = Dict[str, Any]
-
 
 class Metaguru:
-    COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
-
-    _image = None  # type: str
-    _lyrics = ""  # type: Optional[str]
-    _raw_tracks = None  # type: List[JSONDict]
-    _type = None  # type: str
-
     html: str
     meta: JSONDict
 
     def __init__(self, html: str) -> None:
         self.html = html
+
+        # TODO: move it out
         match = re.search(META_BLOCK_PAT, html, flags=re.MULTILINE)
         if match:
             self.meta = json.loads(match.group())
 
-    @property
-    def type(self) -> Optional[str]:
-        """Could be `MusicRecording`, `Product`, `MusicAlbum`."""
-        if self._type:
-            return self._type
+    @cached_property
+    def album(self) -> str:
+        return self.meta.get("name")  # type: ignore
 
-        _type = self.meta["@type"]
-        self._type = ", ".join(_type) if isinstance(_type, list) else _type
+    @cached_property
+    def album_artist(self) -> str:
+        return self.meta.get("byArtist", {}).get("name")  # type: ignore
 
-        return self._type
+    @cached_property
+    def url(self) -> str:
+        return self.meta.get("@id")  # type: ignore
 
-    @property
+    @cached_property
+    def image(self) -> str:
+        image = self.meta.get("image", "")
+        return str(image[0] if isinstance(image, list) else image)
+
+    @cached_property
     def label(self) -> Optional[str]:
         match = re.search(META_LABEL_PAT, self.html)
-        if match:
-            return match.groups()[0]
-        else:
+        return match.groups()[0] if match else None
+
+    @cached_property
+    def lyrics(self) -> Optional[str]:
+        matches = re.findall(META_LYRICS_PAT, self.html)
+        if not matches:
             return None
+        return "\n".join(json.loads(m).get("text") for m in matches)
 
-    @property
-    def image(self) -> Optional[str]:
-        _image = self.meta["image"]
-        self._image = ", ".join(_image) if isinstance(_image, list) else _image
-
-        return self._image
-
-    @property
-    def url(self) -> str:
-        return self.meta["@id"]
-
-    @property
-    def album(self) -> str:
-        return self.meta["name"]
-
-    @property
-    def album_artist(self) -> str:
-        return self.meta["byArtist"]["name"]
-
-    @property
+    @cached_property
     def release_date(self) -> Optional[date]:
         match = re.search(META_RELEASE_DATE_PAT, self.html)
-        if match:
-            return datetime.strptime(match.groups()[0], META_DATE_FORMAT).date()
-        return None
+        if not match:
+            return None
+        return datetime.strptime(match.groups()[0], META_DATE_FORMAT).date()
+
+    @cached_property
+    def type(self) -> str:
+        """Could be `MusicRecording`, `Product`, `MusicAlbum`."""
+        _type = self.meta.get("@type")
+        return ", ".join(_type) if isinstance(_type, list) else str(_type)
 
     @property
-    def raw_tracks(self) -> List[JSONDict]:
-        if self._raw_tracks is None:
-            self._raw_tracks = [i["item"] for i in self.meta["track"]["itemListElement"]]
+    def tracks(self) -> List[JSONDict]:
+        _tracks = []
+        for raw_track in self.meta.get("track", {}).get("itemListElement"):
+            track = raw_track.get("item")
+            name = track.get("name", "")
+            artist, _, title = name.rpartition(TRACK_SPLIT)
+            track["artist"] = artist.strip() or self.album_artist
+            track["title"] = title.strip()
+            track["position"] = raw_track.get("position")
+            _tracks.append(track)
 
-        return self._raw_tracks
+        return _tracks
 
-    @property
-    def lyrics(self) -> Optional[str]:
-        if self._lyrics or self._lyrics is None:
-            return self._lyrics
-
-        lyrics_matches = re.findall(META_LYRICS_PAT, self.html)
-        lyrics = []
-        for match in lyrics_matches:
-            lyrics.append(json.loads(match)["text"])
-            self._lyrics = "\n\n".join(lyrics)
-        else:
-            self._lyrics = None
-
-        return self._lyrics
+    @cached_property
+    def is_compilation(self) -> bool:
+        artists = {track["artist"] for track in self.tracks}
+        if len(artists) == 1 and artists.pop() == self.album_artist:
+            return False
+        return True
 
     @property
     def standalone_trackinfo(self) -> TrackInfo:
-        if self.type and "MusicAlbum" in self.type:
-            return None
-
         return TrackInfo(
             self.album,
             self.url,
-            length=floor(self.meta["duration_secs"]),
+            length=floor(self.meta.get("duration_secs", 0)) or None,
             artist=self.album_artist,
             artist_id=self.url,
             data_url=self.url,
-            **self.COMMON,
-        )
-
-    def _trackinfo(self, track: JSONDict, index: int) -> TrackInfo:
-        # TODO: Check for VA too
-        artist = self.album_artist
-        title = track["name"]
-        if TRACK_SPLIT in title:
-            artist, title = [s.strip() for s in title.split(TRACK_SPLIT, maxsplit=1)]
-
-        return TrackInfo(
-            title,
-            track["url"],
-            index=index,
-            length=floor(track["duration_secs"]),
-            data_url=track["url"],
-            artist=artist,
+            **COMMON,
         )
 
     @property
-    def tracks(self) -> List[TrackInfo]:
+    def trackinfos(self) -> List[TrackInfo]:
         return [
-            self._trackinfo(track, idx) for idx, track in enumerate(self.raw_tracks, 1)
+            TrackInfo(
+                track.get("title"),
+                track.get("url"),
+                index=track.get("position"),
+                length=floor(track.get("duration_secs", 0)) or None,
+                data_url=track.get("url"),
+                artist=track.get("artist"),
+                **COMMON,
+            )
+            for track in self.tracks
         ]
 
     @property
@@ -192,75 +175,80 @@ class Metaguru:
             self.url,
             self.album_artist,
             self.url,
-            self.tracks,
-            year=self.release_date.year if self.release_date else None,
-            month=self.release_date.month if self.release_date else None,
-            day=self.release_date.day if self.release_date else None,
+            self.trackinfos,
+            va=self.is_compilation,
+            year=self.release_date.year,
+            month=self.release_date.month,
+            day=self.release_date.day,
             label=self.label,
             country=COUNTRY,
             data_url=self.url,
-            **self.COMMON,
+            **COMMON,
         )
 
 
-class RequestsHandler:
+class BandcampRequestsHandler:
     """A class that provides an ability to make requests and handles failures."""
 
-    _log = logging.Logger
+    _log: logging.Logger
 
-    def _report(self, msg, e=None, url=None, level=logging.DEBUG):
-        # type: (str, Optional[Exception], Optional[str], int) -> None
-        self._log.log(level, f"{msg} {url!r}: {e}")  # type: ignore[call-arg, arg-type]
+    def _exc(self, msg_template: str, *args: Sequence[str]) -> None:
+        self._log.log(logging.WARNING, msg_template, *args, exc_info=True)
+
+    def _info(self, msg_template: str, *args: Sequence[str]) -> None:
+        self._log.log(logging.INFO, msg_template, *args, exc_info=False)
+
+    def _from_bandcamp(self, item: Item) -> bool:
+        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
 
     def _get(self, url: str) -> Optional[str]:
-        """Returns a BeautifulSoup object with the contents of url."""
+        """Return text contents of the url response."""
         headers = {"User-Agent": USER_AGENT}
         try:
             r = requests.get(url, headers=headers)
             r.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            self._report("Communication error while fetching album", e, url)
+        except requests.exceptions.RequestException:
+            self._exc("Communication error while fetching URL: {}", url)
             return None
-        return r.content.decode()
+        return r.text
 
 
-class BandcampAlbumArt(RequestsHandler, fetchart.RemoteArtSource):
+class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
     NAME = "Bandcamp"
 
-    def get(self, album: AlbumInfo, *args: Tuple[Any]) -> Optional[Iterator[str]]:
+    def get(self, album: AlbumInfo, *args: Sequence[Any]) -> fetchart.Candidate:
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
         url = album.mb_albumid
-        if not isinstance(url, six.string_types) or DATA_SOURCE not in url:
+        if not isinstance(url, six.string_types) or not self._from_bandcamp(album):
+            self._info("Not fetching art for a non-bandcamp album")
             return None
 
         html = self._get(url)
         if not html:
             return None
+
         try:
             image_url = Metaguru(html).image
-            yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
-        except ValueError as e:
-            self._report("Unexpected html error fetching bandcamp album art: ", e)
-            return None
+            return self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
+        except Exception:
+            self._exc("Unexpected parsing error fetching bandcamp album art")
 
 
-class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
+class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def __init__(self) -> None:
         super(BandcampPlugin, self).__init__()
-        self.config.add(DEFAULT_CONFIG)
+        self.config.add(DEFAULT_CONFIG.copy())
         self.import_stages = [self.imported]
         self.register_listener("pluginload", self.loaded)
 
-    def _from_bandcamp(self, item: Any) -> bool:
-        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
-
-    def add_lyrics(self, item: Any, write: bool = False) -> None:
+    def add_lyrics(self, item: Item, write: bool = False) -> None:
         """Fetch and store lyrics for a single item. If ``write``, then the
-        lyrics will also be written to the file itself."""
+        lyrics will also be written to the file itself.
+        """
         if item.lyrics:
-            self._report("lyrics already present: {0}", item, level=logging.INFO)
+            self._info("Lyrics are already present: {}", item)
             return None
 
         html = self._get(item.mb_trackid)
@@ -269,10 +257,10 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
 
         lyrics = Metaguru(html).lyrics
         if not lyrics:
-            self._report("lyrics not found: {0}", item, level=logging.INFO)
+            self._info("Lyrics not found: {}", item)
             return None
 
-        self._report("fetched lyrics: {0}", item, level=logging.INFO)
+        self._info("Fetched lyrics: {}", item)
         item.lyrics = lyrics
         if write:
             item.try_write()
@@ -300,32 +288,25 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
                     fetchart.SOURCE_NAMES[BandcampAlbumArt] = DATA_SOURCE
                     break
 
-    def album_distance(self, items: List[Any], album_info: AlbumInfo, _: Any) -> Distance:
+    def album_distance(self, items, album_info, _):
+        # type: (List[Any], AlbumInfo, Any) -> Distance
         """Return the album distance."""
         dist = Distance()
-
         if self._from_bandcamp(album_info):
             dist.add("source", self.config["source_weight"].as_number())
         return dist
 
     def candidates(self, items, artist, album, va_likely):
-        # type: (List[Any], str, str, bool) -> List[AlbumInfo]
+        # type: (List[Item], str, str, bool) -> List[AlbumInfo]
         """Return a list of albums given a search query."""
-        return [
-            album
-            for album in (self.get_album_info(url) for url in self._search(album, ALBUM))
-            if album
-        ]
+        urls = self._search(album, ALBUM)
+        return list(filter(truth, map(lambda u: self.get_album_info(u), urls)))
 
     def item_candidates(self, item, artist, album):
-        # type: (TrackInfo, str, str) -> List[TrackInfo]
+        # type: (Item, str, str) -> List[TrackInfo]
         """Return a list of tracks from a bandcamp search matching a singleton."""
-        query = item.title or item.album or item.artist
-        return [
-            track
-            for track in (self.get_track_info(url) for url in self._search(query, TRACK))
-            if track
-        ]
+        urls = self._search(item.title or item.album or item.artist, TRACK)
+        return list(filter(truth, map(lambda u: self.get_track_info(u), urls)))
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID and return it if found."""
@@ -345,26 +326,30 @@ class BandcampPlugin(RequestsHandler, plugins.BeetsPlugin):
         html = self._get(url)
         return Metaguru(html).standalone_trackinfo if html else None
 
-    def _search(self, query, search_type=ALBUM, page=1):
-        # type: (str, str, int) -> List[str]
+    def _search(self, query: str, search_type: str = ALBUM) -> List[str]:
         """Return a list of URLs for items of type search_type matching the query."""
-        urls: Set[str] = set()
+        urls: List[str] = []
+        page = 1
 
-        while len(urls) < self.config["min_candidates"].as_number():
-            self._report(f"Searching {search_type}, page {page}")
-            html = self._get(SEARCH_URL.format(query=query, page=page))
+        pattern = SEARCH_ITEM_PAT.format(search_type)
+        max_urls = self.config["min_candidates"].as_number()
+        while len(urls) < max_urls:
+            self._info("Searching {0}, page {1}", search_type, str(page))
+
+            html = self._get(SEARCH_URL.format(query, page))
             if not html:
-                continue
+                break
 
-            matches = re.findall(SEARCH_ITEM_PAT.format(query), html)
-            for match in matches:
-                urls.add(match)
-                if len(urls) == self.config["max_candidates"]:
-                    break
+            matches = re.findall(rf"{pattern}", html)
+            for url in set(matches):
+                urls.append(url)
+                if len(urls) == max_urls:
+                    return urls
 
             # Stop searching if we are on the last page.
-            if not re.search(rf"page={page}", html):
-                break
-            page += 1
+            next_page = page + 1
+            if not re.search(rf"page={next_page}", html):
+                return urls
+            page = next_page
 
-        return list(urls)
+        return urls
