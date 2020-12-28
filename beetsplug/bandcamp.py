@@ -198,9 +198,6 @@ class BandcampRequestsHandler:
     def _info(self, msg_template: str, *args: Sequence[str]) -> None:
         self._log.log(logging.INFO, msg_template, *args, exc_info=False)
 
-    def _from_bandcamp(self, item: Item) -> bool:
-        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
-
     def _get(self, url: str) -> Optional[str]:
         """Return text contents of the url response."""
         headers = {"User-Agent": USER_AGENT}
@@ -216,12 +213,12 @@ class BandcampRequestsHandler:
 class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
     NAME = "Bandcamp"
 
-    def get(self, album: AlbumInfo, *args: Sequence[Any]) -> fetchart.Candidate:
+    def get(self, album: AlbumInfo, *_: Sequence[Any]) -> fetchart.Candidate:
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
         url = album.mb_albumid
-        if not isinstance(url, six.string_types) or not self._from_bandcamp(album):
+        if not isinstance(url, six.string_types) or DATA_SOURCE not in url:
             self._info("Not fetching art for a non-bandcamp album")
             return None
 
@@ -231,17 +228,22 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
 
         try:
             image_url = Metaguru(html).image
-            return self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
+            yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
         except Exception:
             self._exc("Unexpected parsing error fetching bandcamp album art")
+        return None
 
 
 class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def __init__(self) -> None:
-        super(BandcampPlugin, self).__init__()
+        super().__init__()
         self.config.add(DEFAULT_CONFIG.copy())
         self.import_stages = [self.imported]
         self.register_listener("pluginload", self.loaded)
+
+    @staticmethod
+    def _from_bandcamp(item: Item) -> bool:
+        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
 
     def add_lyrics(self, item: Item, write: bool = False) -> None:
         """Fetch and store lyrics for a single item. If ``write``, then the
@@ -299,14 +301,13 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def candidates(self, items, artist, album, va_likely):
         # type: (List[Item], str, str, bool) -> List[AlbumInfo]
         """Return a list of albums given a search query."""
-        urls = self._search(album, ALBUM)
-        return list(filter(truth, map(lambda u: self.get_album_info(u), urls)))
+        return list(filter(truth, map(self.get_album_info, self._search(album, ALBUM))))
 
-    def item_candidates(self, item, artist, album):
+    def item_candidates(self, item, artist, title):
         # type: (Item, str, str) -> List[TrackInfo]
         """Return a list of tracks from a bandcamp search matching a singleton."""
-        urls = self._search(item.title or item.album or item.artist, TRACK)
-        return list(filter(truth, map(lambda u: self.get_track_info(u), urls)))
+        query = title or item.album or artist
+        return list(filter(truth, map(self.get_track_info, self._search(query, TRACK))))
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID and return it if found."""
