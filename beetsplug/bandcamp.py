@@ -54,14 +54,17 @@ TRACK = "track"
 
 COUNTRY = "XW"
 MEDIA = "Digital Media"
+ALBUM_STATUS = "Official"
 DATA_SOURCE = "bandcamp"
 COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
 
-META_BLOCK_PAT = r".*datePublished.*"
-META_LYRICS_PAT = r'"lyrics":({[^}]*})'
-META_LABEL_PAT = r'og:site_name".*content="([^"]*)"'
-META_RELEASE_DATE_PAT = r" released (.*)"
-META_DATE_FORMAT = "%d %B %Y"
+TRACK_SPLIT = "-"
+DATE_FORMAT = "%d %B %Y"
+BLOCK_PAT = re.compile(r".*datePublished.*", flags=re.MULTILINE)
+CATALOGNUM_PAT = re.compile(r"^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?")
+LABEL_PAT = re.compile(r'og:site_name".*content="([^"]*)"')
+LYRICS_PAT = re.compile(r'"lyrics":({[^}]*})')
+RELEASE_DATE_PAT = re.compile(r" released (.*)")
 
 # track_alt and artist are optional in the track name
 TRACK_NAME_PAT = re.compile(
@@ -71,8 +74,6 @@ TRACK_NAME_PAT = re.compile(
 (?P<title>.*)""",
     re.VERBOSE,
 )
-
-TRACK_SPLIT = "-"
 
 
 class NoTracklistException(Exception):
@@ -88,7 +89,7 @@ class Metaguru:
         self.html = html
 
         # TODO: move it out
-        match = re.search(META_BLOCK_PAT, html, flags=re.MULTILINE)
+        match = re.search(BLOCK_PAT, html)
         if match:
             self.meta = json.loads(match.group())
 
@@ -105,11 +106,11 @@ class Metaguru:
         return self.meta["inAlbum"]["@id"]  # type: ignore
 
     @cached_property
-    def url(self) -> str:
+    def album_id(self) -> str:
         return self.meta["@id"]  # type: ignore
 
     @cached_property
-    def artist_url(self) -> str:
+    def artist_id(self) -> str:
         return self.meta["byArtist"]["@id"]  # type: ignore
 
     @cached_property
@@ -119,22 +120,22 @@ class Metaguru:
 
     @cached_property
     def label(self) -> Optional[str]:
-        match = re.search(META_LABEL_PAT, self.html)
+        match = re.search(LABEL_PAT, self.html)
         return match.groups()[0] if match else None
 
     @cached_property
     def lyrics(self) -> Optional[str]:
-        matches = re.findall(META_LYRICS_PAT, self.html)
+        matches = re.findall(LYRICS_PAT, self.html)
         if not matches:
             return None
         return "\n".join(json.loads(m).get("text") for m in matches)
 
     @cached_property
     def release_date(self) -> Optional[date]:
-        match = re.search(META_RELEASE_DATE_PAT, self.html)
+        match = re.search(RELEASE_DATE_PAT, self.html)
         if not match:
             return None
-        return datetime.strptime(match.groups()[0], META_DATE_FORMAT).date()
+        return datetime.strptime(match.groups()[0], DATE_FORMAT).date()
 
     def _parse_track_name(self, name: str) -> Dict[str, str]:
         match = re.search(TRACK_NAME_PAT, name)
@@ -171,16 +172,29 @@ class Metaguru:
             return False
         return True
 
+    @cached_property
+    def catalognum(self) -> str:
+        match = re.search(CATALOGNUM_PAT, self.album)
+        return match.group() if match else ""  # type: ignore
+
+    @cached_property
+    def albumtype(self) -> str:
+        if self.is_compilation:
+            return "compilation"
+        if self.catalognum:
+            return "ep"
+        return "album"
+
     @property
     def singleton(self) -> TrackInfo:
         track_data = self._parse_track_name(self.album)
         return TrackInfo(
             track_data["title"],
-            self.url,
+            self.album_id,
             length=floor(self.meta.get("duration_secs", 0)) or None,
             artist=track_data["artist"],
-            artist_id=self.artist_url,
-            data_url=self.url,
+            artist_id=self.artist_id,
+            data_url=self.album_id,
             **COMMON,
         )
 
@@ -194,7 +208,7 @@ class Metaguru:
                 length=floor(track.get("duration_secs", 0)) or None,
                 data_url=track.get("url"),
                 artist=track.get("artist"),
-                artist_id=self.artist_url,
+                artist_id=self.artist_id,
                 track_alt=track.get("track_alt"),
                 **COMMON,
             )
@@ -205,9 +219,9 @@ class Metaguru:
     def albuminfo(self) -> AlbumInfo:
         return AlbumInfo(
             self.album,
-            self.url,
+            self.album_id,
             self.albumartist,
-            self.artist_url,
+            self.artist_id,
             self.trackinfos,
             va=self.is_compilation,
             year=self.release_date.year,
@@ -217,8 +231,11 @@ class Metaguru:
             original_month=self.release_date.month,
             original_day=self.release_date.day,
             label=self.label,
+            catalognum=self.catalognum,
+            albumtype=self.albumtype,
+            data_url=self.album_id,
+            albumstatus=ALBUM_STATUS,
             country=COUNTRY,
-            data_url=self.url,
             **COMMON,
         )
 
@@ -253,6 +270,10 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
+        if hasattr(album, "art_source") and album.art_source == DATA_SOURCE:
+            self._info("Art cover is already present")
+            return None
+
         url = album.mb_albumid
         if not isinstance(url, six.string_types) or DATA_SOURCE not in url:
             self._info("Not fetching art for a non-bandcamp album")
@@ -380,14 +401,14 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         pattern = SEARCH_ITEM_PAT.format(search_type)
         max_urls = self.config["min_candidates"].as_number()
         while len(urls) < max_urls:
-            self._info("Searching {0}, page {1}", search_type, str(page))
+            self._info("Searching {}, page {}", search_type, str(page))
 
             html = self._get(SEARCH_URL.format(query, page))
             if not html:
                 break
 
             matches = set(re.findall(rf"{pattern}", html))
-            self._info("Found {0} {1} urls", str(len(matches)), search_type)
+            self._info("Found {} {} urls", str(len(matches)), search_type)
             for url in matches:
                 urls.append(url)
                 if len(urls) == max_urls:

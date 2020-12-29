@@ -5,22 +5,11 @@ from beetsplug.bandcamp import BandcampPlugin, Metaguru
 
 # mypy: allow-untyped-defs
 
-COMMON_FIELDS = [
-    "image",
-    "album",
-    "albumartist",
-    "label",
-    "release_date",
-]
-
+COMMON_FIELDS = ["image", "album_id", "artist_id"]
 TRACK_FIELDS = {
-    # "arranger",
     "artist",
     # TODO: "artist_credit",  # the original version ... RR4
     "artist_id",
-    # TODO: "artist_sort",
-    # "composer",
-    # "composer_sort",
     "data_source",
     "data_url",
     # "disctitle",
@@ -45,20 +34,19 @@ ALBUM_FIELDS = [
     "artist_id",
     "tracks",
     # "asin",
-    # "albumtype",
+    "albumtype",
     "va",
     "year",
     "month",
     "day",
     "label",
     # "mediums",
-    # TODO: "artist_sort",
     # "releasegroup_id",
-    # TODO: "catalognum",
+    "catalognum",
     # "script",
     # "language",
     "country",
-    # TODO: "albumstatus",
+    "albumstatus",
     "media",
     # "albumdisambig",
     # "releasegroupdisambig",
@@ -66,7 +54,7 @@ ALBUM_FIELDS = [
     "original_year",
     "original_month",
     "original_day",
-    "data_source",  # bandcamp
+    "data_source",
     "data_url",
 ]
 

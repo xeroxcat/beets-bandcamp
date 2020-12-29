@@ -2,36 +2,35 @@
 import codecs
 from dataclasses import dataclass
 from datetime import date
-from typing import List, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug.bandcamp import COUNTRY, DATA_SOURCE, MEDIA
+from beetsplug.bandcamp import ALBUM_STATUS, COUNTRY, DATA_SOURCE, MEDIA
 
 # mypy: no-warn-return-any
+
+JSONDict = Dict[str, Any]
 
 
 @dataclass
 class ReleaseInfo:
     image: str
-    album: str
     album_id: str
-    albumartist: str
     artist_id: str
-    label: str
-    release_date: date
-    va: bool
     track_count: int
     singleton = None  # type: TrackInfo
     albuminfo = None  # type: AlbumInfo
 
     def trackinfo(self, index: int, info: Tuple) -> TrackInfo:
         if len(info) == 4:
-            track_url, artist, title, length = info
+            track_id, artist, title, length = info
             alt = None
         else:
-            track_url, artist, title, length, alt = info
+            track_id, artist, title, length, alt = info
+
+        track_url = f"{self.artist_id}/track/{track_id}"
 
         return TrackInfo(
             title,
@@ -58,22 +57,26 @@ class ReleaseInfo:
             media=MEDIA,
         )
 
-    def set_albuminfo(self, tracks: List[Tuple]) -> None:
+    def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
+        data = kwargs
         self.albuminfo = AlbumInfo(
-            self.album,
+            data["album"],
             self.album_id,
-            self.albumartist,
+            data["albumartist"],
             self.artist_id,
             tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
             data_url=self.album_id,
-            year=self.release_date.year,
-            month=self.release_date.month,
-            day=self.release_date.day,
-            original_year=self.release_date.year,
-            original_month=self.release_date.month,
-            original_day=self.release_date.day,
-            label=self.label,
-            va=self.va,
+            year=data["release_date"].year,
+            month=data["release_date"].month,
+            day=data["release_date"].day,
+            original_year=data["release_date"].year,
+            original_month=data["release_date"].month,
+            original_day=data["release_date"].day,
+            label=data["label"],
+            va=data["va"],
+            albumtype=data["albumtype"],
+            catalognum=data["catalognum"],
+            albumstatus=ALBUM_STATUS,
             data_source=DATA_SOURCE,
             media=MEDIA,
             country=COUNTRY,
@@ -84,18 +87,11 @@ class ReleaseInfo:
 def single_track_release() -> Tuple[str, ReleaseInfo]:
     """Single track as a release on its own."""
     test_html_file = "tests/single.html"
-    info = ReleaseInfo(  # expected
-        **{
-            "image": "https://f4.bcbits.com/img/a2036476476_10.jpg",
-            "album": "Matriark - Arangel",
-            "album_id": "https://mega-tech.bandcamp.com/track/matriark-arangel",
-            "albumartist": "Megatech",
-            "artist_id": "https://mega-tech.bandcamp.com",
-            "label": "Megatech",
-            "release_date": date(2020, 11, 9),
-            "track_count": 1,
-            "va": False,
-        }
+    info = ReleaseInfo(
+        image="https://f4.bcbits.com/img/a2036476476_10.jpg",
+        artist_id="https://mega-tech.bandcamp.com",
+        album_id="https://mega-tech.bandcamp.com/track/matriark-arangel",
+        track_count=1,
     )
     info.set_singleton("Matriark", "Arangel", 421)
     return codecs.open(test_html_file).read(), info
@@ -106,25 +102,26 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
     """Single track which is part of an album release."""
     test_html_file = "tests/single_track.html"
     album_artist = "Alpha Tracks"
-    info = ReleaseInfo(  # expected
-        **{
-            "image": "https://f4.bcbits.com/img/a0610664056_10.jpg",
-            "album": "SINE03",
-            "album_id": "https://sinensis-ute.bandcamp.com/album/sine03",
-            "albumartist": album_artist,
-            "artist_id": "https://sinensis-ute.bandcamp.com",
-            "label": "Sinensis",
-            "release_date": date(2020, 6, 16),
-            "track_count": 2,
-            "va": False,
-        }
+    info = ReleaseInfo(
+        image="https://f4.bcbits.com/img/a0610664056_10.jpg",
+        artist_id="https://sinensis-ute.bandcamp.com",
+        album_id="https://sinensis-ute.bandcamp.com/album/sine03",
+        track_count=2,
     )
-    turl = "https://sinensis-ute.bandcamp.com/track"
     tracks = [
-        (f"{turl}/live-at-parken", album_artist, "Live At PARKEN", 3600),
-        (f"{turl}/odondo", album_artist, "Odondo", 371),
+        ("live-at-parken", album_artist, "Live At PARKEN", 3600),
+        ("odondo", album_artist, "Odondo", 371),
     ]
-    info.set_albuminfo(tracks)
+    info.set_albuminfo(
+        tracks,
+        album="SINE03",
+        albumartist=album_artist,
+        label="Sinensis",
+        albumtype="ep",
+        catalognum="SINE03",
+        release_date=date(2020, 6, 16),
+        va=False,
+    )
     return codecs.open(test_html_file).read(), info
 
 
@@ -133,96 +130,99 @@ def album() -> Tuple[str, ReleaseInfo]:
     test_html_file = "tests/album.html"
     album_artist = "Mikkel Rev"
     info = ReleaseInfo(
-        **{
-            "image": "https://f4.bcbits.com/img/a1035657740_10.jpg",
-            "album": "UTE004",
-            "album_id": "https://ute-rec.bandcamp.com/album/ute004",
-            "albumartist": album_artist,
-            "artist_id": "https://ute-rec.bandcamp.com",
-            "label": "Ute.Rec",
-            "release_date": date(2020, 7, 17),
-            "track_count": 4,
-            "va": False,
-        }
+        image="https://f4.bcbits.com/img/a1035657740_10.jpg",
+        artist_id="https://ute-rec.bandcamp.com",
+        album_id="https://ute-rec.bandcamp.com/album/ute004",
+        track_count=4,
     )
-    turl = "https://ute-rec.bandcamp.com/track"
     tracks = [
         (
-            f"{turl}/the-human-experience-empathy-mix",
+            "the-human-experience-empathy-mix",
             album_artist,
             "The Human Experience (Empathy Mix)",
             504,
         ),
-        (f"{turl}/parallell", album_artist, "Parallell", 487),
-        (f"{turl}/formulae", album_artist, "Formulae", 431),
-        (f"{turl}/biotope", album_artist, "Biotope", 421),
+        ("parallell", album_artist, "Parallell", 487),
+        ("formulae", album_artist, "Formulae", 431),
+        ("biotope", album_artist, "Biotope", 421),
     ]
-    info.set_albuminfo(tracks)
+    info.set_albuminfo(
+        tracks,
+        album="UTE004",
+        albumartist=album_artist,
+        albumtype="ep",
+        catalognum="UTE004",
+        label="Ute.Rec",
+        release_date=date(2020, 7, 17),
+        va=False,
+    )
     return codecs.open(test_html_file).read(), info
 
 
 def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
     """An album with alternative track indexes."""
     test_html_file = "tests/track_alt.html"
+    artist_id = "https://foldrecords.bandcamp.com"
     info = ReleaseInfo(
-        **{
-            "image": "https://f4.bcbits.com/img/a2798384948_10.jpg",
-            "album": "FLD001 // Gareth Wild - Common Assault EP",
-            "album_id": "https://foldrecords.bandcamp.com/album/fld001-gareth-wild-common-assault-ep",
-            "albumartist": "Gareth Wild",
-            "artist_id": "https://foldrecords.bandcamp.com",
-            "label": "Fold Records",
-            "release_date": date(2020, 11, 29),
-            "track_count": 6,
-            "va": False,
-        }
+        image="https://f4.bcbits.com/img/a2798384948_10.jpg",
+        artist_id=artist_id,
+        album_id=f"{artist_id}/album/fld001-gareth-wild-common-assault-ep",
+        track_count=6,
     )
-    turl = "https://foldrecords.bandcamp.com/track"
     tracks = [
         (
-            f"{turl}/a1-gareth-wild-live-wire",
+            "a1-gareth-wild-live-wire",
             "Gareth Wild",
             "Live Wire",
             357,
             "A1",
         ),
         (
-            f"{turl}/a2-gareth-wild-live-wire-roll-dann-remix",
+            "a2-gareth-wild-live-wire-roll-dann-remix",
             "Gareth Wild",
             "Live Wire ( Roll Dann Remix )",
             351,
             "A2",
         ),
         (
-            f"{turl}/a3-gareth-wild-dds-locked-groove",
+            "a3-gareth-wild-dds-locked-groove",
             "Gareth Wild",
             "DDS [Locked Groove]",
             20,
             "A3",
         ),
         (
-            f"{turl}/aa1-gareth-wild-common-assault",
+            "aa1-gareth-wild-common-assault",
             "Gareth Wild",
             "Common Assault",
             315,
             "AA1",
         ),
         (
-            f"{turl}/aa2-gareth-wild-saturn-storm",
+            "aa2-gareth-wild-saturn-storm",
             "Gareth Wild",
             "Saturn Storm",
             365,
             "AA2",
         ),
         (
-            f"{turl}/aa3-gareth-wild-quadrant-locked-groove",
+            "aa3-gareth-wild-quadrant-locked-groove",
             "Gareth Wild",
             "Quadrant [Locked Groove]",
             414,
             "AA3",
         ),
     ]
-    info.set_albuminfo(tracks)
+    info.set_albuminfo(
+        tracks,
+        album="FLD001 // Gareth Wild - Common Assault EP",
+        albumartist="Gareth Wild",
+        albumtype="ep",
+        catalognum="FLD001",
+        label="Fold Records",
+        release_date=date(2020, 11, 29),
+        va=False,
+    )
     return codecs.open(test_html_file).read(), info
 
 
@@ -230,34 +230,35 @@ def compilation() -> Tuple[str, ReleaseInfo]:
     """An album with various artists."""
     test_html_file = "tests/compilation.html"
     info = ReleaseInfo(
-        **{
-            "image": "https://f4.bcbits.com/img/a4292881830_10.jpg",
-            "album": "ISMVA003.3",
-            "album_id": "https://ismusberlin.bandcamp.com/album/ismva0033",
-            "albumartist": "Ismus",
-            "artist_id": "https://ismusberlin.bandcamp.com",
-            "label": "Ismus",
-            "release_date": date(2020, 11, 29),
-            "track_count": 13,
-            "va": True,
-        }
+        image="https://f4.bcbits.com/img/a4292881830_10.jpg",
+        artist_id="https://ismusberlin.bandcamp.com",
+        album_id="https://ismusberlin.bandcamp.com/album/ismva0033",
+        track_count=13,
     )
-    turl = "https://ismusberlin.bandcamp.com/track"
     tracks = [
         (
-            f"{turl}/zebar-zimo-wish-granter-original-mix",
+            "zebar-zimo-wish-granter-original-mix",
             "Zebar & Zimo",
             "Wish Granter (Original Mix)",
             414,
         ),
         (
-            f"{turl}/alpha-tracks-valimba-original-mix",
+            "alpha-tracks-valimba-original-mix",
             "Alpha Tracks",
             "Valimba (Original Mix)",
             361,
         ),
     ]
-    info.set_albuminfo(tracks)
+    info.set_albuminfo(
+        tracks,
+        album="ISMVA003.3",
+        albumartist="Ismus",
+        albumtype="compilation",
+        catalognum="ISMVA003.3",
+        label="Ismus",
+        release_date=date(2020, 11, 29),
+        va=True,
+    )
     return codecs.open(test_html_file).read(), info
 
 
