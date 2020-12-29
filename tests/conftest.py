@@ -14,23 +14,19 @@ from beetsplug.bandcamp import COUNTRY, DATA_SOURCE, MEDIA
 
 @dataclass
 class ReleaseInfo:
-    type: str  # song or album
-    image: str  # url
-    album: str  # <artist> - <single>
-    album_artist: str
+    image: str
+    album: str
+    album_id: str
+    albumartist: str
+    artist_id: str
     label: str
     release_date: date
     va: bool
     track_count: int
     singleton = None  # type: TrackInfo
-    _albuminfo = None  # type: AlbumInfo
+    albuminfo = None  # type: AlbumInfo
 
-    @property
-    def albuminfo(self) -> AlbumInfo:
-        return self._albuminfo
-
-    @staticmethod
-    def trackinfo(index: int, info: Tuple) -> TrackInfo:
+    def trackinfo(self, index: int, info: Tuple) -> TrackInfo:
         if len(info) == 4:
             track_url, artist, title, length = info
             alt = None
@@ -44,19 +40,32 @@ class ReleaseInfo:
             length=length,
             data_url=track_url,
             artist=artist,
+            artist_id=self.artist_id,
             track_alt=alt,
             data_source=DATA_SOURCE,
             media=MEDIA,
         )
 
-    def set_albuminfo(self, url: str, tracks: List[Tuple]) -> None:
-        self._albuminfo = AlbumInfo(
+    def set_singleton(self, artist: str, title: str, length: int) -> None:
+        self.singleton = TrackInfo(
+            title,
+            self.album_id,
+            artist=artist,
+            artist_id=self.artist_id,
+            length=length,
+            data_url=self.album_id,
+            data_source=DATA_SOURCE,
+            media=MEDIA,
+        )
+
+    def set_albuminfo(self, tracks: List[Tuple]) -> None:
+        self.albuminfo = AlbumInfo(
             self.album,
-            url,
-            self.album_artist,
-            url,  # TODO: check mb instead
+            self.album_id,
+            self.albumartist,
+            self.artist_id,
             tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
-            data_url=url,
+            data_url=self.album_id,
             year=self.release_date.year,
             month=self.release_date.month,
             day=self.release_date.day,
@@ -75,44 +84,35 @@ class ReleaseInfo:
 def single_track_release() -> Tuple[str, ReleaseInfo]:
     """Single track as a release on its own."""
     test_html_file = "tests/single.html"
-    url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
     info = ReleaseInfo(  # expected
         **{
-            "type": "MusicRecording, Product",
             "image": "https://f4.bcbits.com/img/a2036476476_10.jpg",
             "album": "Matriark - Arangel",
-            "album_artist": "Megatech",
+            "album_id": "https://mega-tech.bandcamp.com/track/matriark-arangel",
+            "albumartist": "Megatech",
+            "artist_id": "https://mega-tech.bandcamp.com",
             "label": "Megatech",
             "release_date": date(2020, 11, 9),
             "track_count": 1,
             "va": False,
         }
     )
-    info.singleton = TrackInfo(
-        info.album,
-        url,
-        length=421,
-        artist=info.album_artist,
-        artist_id=url,
-        data_url=url,
-        data_source=DATA_SOURCE,
-        media=MEDIA,
-    )
-    return codecs.open(test_html_file, "r", "utf-8").read(), info
+    info.set_singleton("Matriark", "Arangel", 421)
+    return codecs.open(test_html_file).read(), info
 
 
 @pytest.fixture
 def single_track_album_search() -> Tuple[str, ReleaseInfo]:
     """Single track which is part of an album release."""
     test_html_file = "tests/single_track.html"
-    album_url = "https://sinensis-ute.bandcamp.com/album/sine03"
     album_artist = "Alpha Tracks"
     info = ReleaseInfo(  # expected
         **{
-            "type": "MusicAlbum",
             "image": "https://f4.bcbits.com/img/a0610664056_10.jpg",
             "album": "SINE03",
-            "album_artist": album_artist,
+            "album_id": "https://sinensis-ute.bandcamp.com/album/sine03",
+            "albumartist": album_artist,
+            "artist_id": "https://sinensis-ute.bandcamp.com",
             "label": "Sinensis",
             "release_date": date(2020, 6, 16),
             "track_count": 2,
@@ -124,21 +124,21 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         (f"{turl}/live-at-parken", album_artist, "Live At PARKEN", 3600),
         (f"{turl}/odondo", album_artist, "Odondo", 371),
     ]
-    info.set_albuminfo(album_url, tracks)
-    return codecs.open(test_html_file, "r", "utf-8").read(), info
+    info.set_albuminfo(tracks)
+    return codecs.open(test_html_file).read(), info
 
 
 def album() -> Tuple[str, ReleaseInfo]:
     """An album with a single artist."""
     test_html_file = "tests/album.html"
-    url = "https://ute-rec.bandcamp.com/album/ute004"
     album_artist = "Mikkel Rev"
     info = ReleaseInfo(
         **{
-            "type": "MusicAlbum",
             "image": "https://f4.bcbits.com/img/a1035657740_10.jpg",
             "album": "UTE004",
-            "album_artist": album_artist,
+            "album_id": "https://ute-rec.bandcamp.com/album/ute004",
+            "albumartist": album_artist,
+            "artist_id": "https://ute-rec.bandcamp.com",
             "label": "Ute.Rec",
             "release_date": date(2020, 7, 17),
             "track_count": 4,
@@ -157,20 +157,20 @@ def album() -> Tuple[str, ReleaseInfo]:
         (f"{turl}/formulae", album_artist, "Formulae", 431),
         (f"{turl}/biotope", album_artist, "Biotope", 421),
     ]
-    info.set_albuminfo(url, tracks)
-    return codecs.open(test_html_file, "r", "utf-8").read(), info
+    info.set_albuminfo(tracks)
+    return codecs.open(test_html_file).read(), info
 
 
 def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
     """An album with alternative track indexes."""
     test_html_file = "tests/track_alt.html"
-    url = "https://foldrecords.bandcamp.com/album/fld001-gareth-wild-common-assault-ep"
     info = ReleaseInfo(
         **{
-            "type": "Product, MusicRelease",
             "image": "https://f4.bcbits.com/img/a2798384948_10.jpg",
             "album": "FLD001 // Gareth Wild - Common Assault EP",
-            "album_artist": "Gareth Wild",
+            "album_id": "https://foldrecords.bandcamp.com/album/fld001-gareth-wild-common-assault-ep",
+            "albumartist": "Gareth Wild",
+            "artist_id": "https://foldrecords.bandcamp.com",
             "label": "Fold Records",
             "release_date": date(2020, 11, 29),
             "track_count": 6,
@@ -222,20 +222,20 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
             "AA3",
         ),
     ]
-    info.set_albuminfo(url, tracks)
-    return codecs.open(test_html_file, "r", "utf-8").read(), info
+    info.set_albuminfo(tracks)
+    return codecs.open(test_html_file).read(), info
 
 
 def compilation() -> Tuple[str, ReleaseInfo]:
     """An album with various artists."""
     test_html_file = "tests/compilation.html"
-    url = "https://ismusberlin.bandcamp.com/album/ismva0033"
     info = ReleaseInfo(
         **{
-            "type": "MusicAlbum",
             "image": "https://f4.bcbits.com/img/a4292881830_10.jpg",
             "album": "ISMVA003.3",
-            "album_artist": "Ismus",
+            "album_id": "https://ismusberlin.bandcamp.com/album/ismva0033",
+            "albumartist": "Ismus",
+            "artist_id": "https://ismusberlin.bandcamp.com",
             "label": "Ismus",
             "release_date": date(2020, 11, 29),
             "track_count": 13,
@@ -257,8 +257,8 @@ def compilation() -> Tuple[str, ReleaseInfo]:
             361,
         ),
     ]
-    info.set_albuminfo(url, tracks)
-    return codecs.open(test_html_file, "r", "utf-8").read(), info
+    info.set_albuminfo(tracks)
+    return codecs.open(test_html_file).read(), info
 
 
 @pytest.fixture(params=[album, compilation])

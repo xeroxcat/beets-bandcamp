@@ -5,11 +5,10 @@ from beetsplug.bandcamp import BandcampPlugin, Metaguru
 
 # mypy: allow-untyped-defs
 
-MAIN_FIELDS = [
-    "type",
+COMMON_FIELDS = [
     "image",
     "album",
-    "album_artist",
+    "albumartist",
     "label",
     "release_date",
 ]
@@ -17,8 +16,8 @@ MAIN_FIELDS = [
 TRACK_FIELDS = {
     # "arranger",
     "artist",
-    # TODO: "artist_credit",
-    # TODO: "artist_id",
+    # TODO: "artist_credit",  # the original version ... RR4
+    "artist_id",
     # TODO: "artist_sort",
     # "composer",
     # "composer_sort",
@@ -150,7 +149,7 @@ def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
 
-    for field in MAIN_FIELDS:
+    for field in COMMON_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
 
     assert vars(guru.singleton) == vars(expected.singleton)
@@ -162,7 +161,7 @@ def test_parse_album_or_comp(multitracks):
     html, expected = multitracks
     guru = Metaguru(html)
     guru.tracks
-    for field in MAIN_FIELDS:
+    for field in COMMON_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
 
     assert len(guru.tracks) == expected.track_count

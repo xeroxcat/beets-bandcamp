@@ -75,8 +75,9 @@ TRACK_NAME_PAT = re.compile(
 TRACK_SPLIT = "-"
 
 
-class TrackInAlbumException(Exception):
-    pass
+class NoTracklistException(Exception):
+    def __str__(self) -> str:
+        return "Could not find tracklist in the page"
 
 
 class Metaguru:
@@ -93,11 +94,11 @@ class Metaguru:
 
     @cached_property
     def album(self) -> str:
-        return self.meta.get("name")  # type: ignore
+        return self.meta["name"]  # type: ignore
 
     @cached_property
-    def album_artist(self) -> str:
-        return self.meta.get("byArtist", {}).get("name")  # type: ignore
+    def albumartist(self) -> str:
+        return self.meta["byArtist"]["name"]  # type: ignore
 
     @cached_property
     def album_url_from_track(self) -> str:
@@ -105,7 +106,11 @@ class Metaguru:
 
     @cached_property
     def url(self) -> str:
-        return self.meta.get("@id")  # type: ignore
+        return self.meta["@id"]  # type: ignore
+
+    @cached_property
+    def artist_url(self) -> str:
+        return self.meta["byArtist"]["@id"]  # type: ignore
 
     @cached_property
     def image(self) -> str:
@@ -131,12 +136,6 @@ class Metaguru:
             return None
         return datetime.strptime(match.groups()[0], META_DATE_FORMAT).date()
 
-    @cached_property
-    def type(self) -> str:
-        """Could be `MusicRecording`, `Product`, `MusicAlbum`."""
-        _type = self.meta.get("@type")
-        return ", ".join(_type) if isinstance(_type, list) else str(_type)
-
     def _parse_track_name(self, name: str) -> Dict[str, str]:
         match = re.search(TRACK_NAME_PAT, name)
         if not match:  # backup option
@@ -146,7 +145,7 @@ class Metaguru:
             data = match.groupdict()
 
         if not data.get("artist"):
-            data["artist"] = self.album_artist
+            data["artist"] = self.albumartist
         return data
 
     @property
@@ -154,7 +153,7 @@ class Metaguru:
         try:
             raw_tracks = self.meta["track"]["itemListElement"]
         except KeyError as exc:
-            raise TrackInAlbumException() from exc
+            raise NoTracklistException() from exc
 
         tracks = []
         for raw_track in raw_tracks:
@@ -168,19 +167,19 @@ class Metaguru:
     @cached_property
     def is_compilation(self) -> bool:
         artists = {track["artist"] for track in self.tracks}
-        if len(artists) == 1 and artists.pop() == self.album_artist:
+        if len(artists) == 1 and artists.pop() == self.albumartist:
             return False
         return True
 
     @property
     def singleton(self) -> TrackInfo:
+        track_data = self._parse_track_name(self.album)
         return TrackInfo(
-            self.album,
+            track_data["title"],
             self.url,
             length=floor(self.meta.get("duration_secs", 0)) or None,
-            artist=self.album_artist,
-            artist_id=self.url,
-            # track_alt=track.get("track_alt"),
+            artist=track_data["artist"],
+            artist_id=self.artist_url,
             data_url=self.url,
             **COMMON,
         )
@@ -195,6 +194,7 @@ class Metaguru:
                 length=floor(track.get("duration_secs", 0)) or None,
                 data_url=track.get("url"),
                 artist=track.get("artist"),
+                artist_id=self.artist_url,
                 track_alt=track.get("track_alt"),
                 **COMMON,
             )
@@ -206,8 +206,8 @@ class Metaguru:
         return AlbumInfo(
             self.album,
             self.url,
-            self.album_artist,
-            self.url,
+            self.albumartist,
+            self.artist_url,
             self.trackinfos,
             va=self.is_compilation,
             year=self.release_date.year,
@@ -363,7 +363,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         guru = Metaguru(html)
         try:
             return guru.albuminfo
-        except TrackInAlbumException:
+        except NoTracklistException:
             self._info("Track URL {} provided, getting the album instead", url)
             return self.get_album_info(guru.album_url_from_track)
 
@@ -386,8 +386,9 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             if not html:
                 break
 
-            matches = re.findall(rf"{pattern}", html)
-            for url in set(matches):
+            matches = set(re.findall(rf"{pattern}", html))
+            self._info("Found {0} {1} urls", str(len(matches)), search_type)
+            for url in matches:
                 urls.append(url)
                 if len(urls) == max_urls:
                     return urls
