@@ -1,6 +1,9 @@
 import pytest
+from beets.autotag.hooks import AlbumInfo
 
 from beetsplug.bandcamp import BandcampPlugin, Metaguru
+
+# mypy: allow-untyped-defs
 
 MAIN_FIELDS = [
     "type",
@@ -61,12 +64,26 @@ ALBUM_FIELDS = [
     # "albumdisambig",
     # "releasegroupdisambig",
     # TODO: "artist_credit",
-    # "original_year",
-    # "original_month",
-    # "original_day",
+    "original_year",
+    "original_month",
+    "original_day",
     "data_source",  # bandcamp
     "data_url",
 ]
+
+
+def check_album(actual: AlbumInfo, expected: AlbumInfo) -> None:
+    for field in ALBUM_FIELDS:
+        if field != "tracks":
+            assert getattr(actual, field) == getattr(expected, field)
+            continue
+
+        assert hasattr(actual, "tracks")
+
+        expected.tracks.sort(key=lambda t: t.index)
+        actual.tracks.sort(key=lambda t: t.index)
+        for n, expected_track in enumerate(expected.tracks):
+            assert vars(actual.tracks[n]) == vars(expected_track)
 
 
 @pytest.mark.need_connection
@@ -106,35 +123,45 @@ def test_search():
 
 
 @pytest.mark.need_connection
-def test_get_single_track_album(single_track_release) -> None:
-    html, expected = single_track_release
-    expected_track = expected.standalone_trackinfo
+def test_get_single_track_album(single_track_release):
+    _, expected = single_track_release
+    expected_track = expected.singleton
     url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
 
     plugin = BandcampPlugin()
     actual = plugin.get_track_info(url)
 
-    print(actual)
     for field in TRACK_FIELDS:
         assert getattr(actual, field) == getattr(expected_track, field)
 
 
+@pytest.mark.need_connection
+def test_track_url_while_searching_album(single_track_album_search):
+    _, expected = single_track_album_search
+    url = "https://sinensis-ute.bandcamp.com/track/live-at-parken"
+
+    plugin = BandcampPlugin()
+    actual = plugin.get_album_info(url)
+    check_album(actual, expected.albuminfo)
+
+
 @pytest.mark.parsing
-def test_parse_single_track_release(single_track_release) -> None:
+def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
 
     for field in MAIN_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
 
-    assert vars(guru.standalone_trackinfo) == vars(expected.standalone_trackinfo)
+    assert vars(guru.singleton) == vars(expected.singleton)
 
 
+@pytest.mark.dev
 @pytest.mark.parsing
-def test_parse_album_or_comp(multitracks) -> None:
+def test_parse_album_or_comp(multitracks):
     html, expected = multitracks
     guru = Metaguru(html)
-
+    guru.tracks
     for field in MAIN_FIELDS:
         assert getattr(guru, field) == getattr(expected, field)
 

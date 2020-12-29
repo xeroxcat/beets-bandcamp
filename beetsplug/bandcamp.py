@@ -75,6 +75,10 @@ TRACK_NAME_PAT = re.compile(
 TRACK_SPLIT = "-"
 
 
+class TrackInAlbumException(Exception):
+    pass
+
+
 class Metaguru:
     html: str
     meta: JSONDict
@@ -94,6 +98,10 @@ class Metaguru:
     @cached_property
     def album_artist(self) -> str:
         return self.meta.get("byArtist", {}).get("name")  # type: ignore
+
+    @cached_property
+    def album_url_from_track(self) -> str:
+        return self.meta["inAlbum"]["@id"]  # type: ignore
 
     @cached_property
     def url(self) -> str:
@@ -143,14 +151,19 @@ class Metaguru:
 
     @property
     def tracks(self) -> List[JSONDict]:
-        _tracks = []
-        for raw_track in self.meta.get("track", {}).get("itemListElement"):
-            track = raw_track.get("item")
-            track.update(self._parse_track_name(track.get("name", "")))
-            track["position"] = raw_track.get("position")
-            _tracks.append(track)
+        try:
+            raw_tracks = self.meta["track"]["itemListElement"]
+        except KeyError as exc:
+            raise TrackInAlbumException() from exc
 
-        return _tracks
+        tracks = []
+        for raw_track in raw_tracks:
+            track = raw_track["item"]
+            track.update(self._parse_track_name(track["name"]))
+            track["position"] = raw_track["position"]
+            tracks.append(track)
+
+        return tracks
 
     @cached_property
     def is_compilation(self) -> bool:
@@ -160,7 +173,7 @@ class Metaguru:
         return True
 
     @property
-    def standalone_trackinfo(self) -> TrackInfo:
+    def singleton(self) -> TrackInfo:
         return TrackInfo(
             self.album,
             self.url,
@@ -200,6 +213,9 @@ class Metaguru:
             year=self.release_date.year,
             month=self.release_date.month,
             day=self.release_date.day,
+            original_year=self.release_date.year,
+            original_month=self.release_date.month,
+            original_day=self.release_date.day,
             label=self.label,
             country=COUNTRY,
             data_url=self.url,
@@ -287,6 +303,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         if write:
             item.try_write()
         item.store()
+        return None
 
     def imported(self, _: Any, task: Any) -> None:
         """Import hook for fetching lyrics from bandcamp automatically."""
@@ -340,12 +357,20 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def get_album_info(self, url: str) -> Optional[AlbumInfo]:
         """Return an AlbumInfo object for a bandcamp album page."""
         html = self._get(url)
-        return Metaguru(html).albuminfo if html else None
+        if not html:
+            return None
+
+        guru = Metaguru(html)
+        try:
+            return guru.albuminfo
+        except TrackInAlbumException:
+            self._info("Track URL {} provided, getting the album instead", url)
+            return self.get_album_info(guru.album_url_from_track)
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
         html = self._get(url)
-        return Metaguru(html).standalone_trackinfo if html else None
+        return Metaguru(html).singleton if html else None
 
     def _search(self, query: str, search_type: str = ALBUM) -> List[str]:
         """Return a list of URLs for items of type search_type matching the query."""

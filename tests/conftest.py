@@ -22,7 +22,7 @@ class ReleaseInfo:
     release_date: date
     va: bool
     track_count: int
-    standalone_trackinfo = None  # type: TrackInfo
+    singleton = None  # type: TrackInfo
     _albuminfo = None  # type: AlbumInfo
 
     @property
@@ -32,10 +32,10 @@ class ReleaseInfo:
     @staticmethod
     def trackinfo(index: int, info: Tuple) -> TrackInfo:
         if len(info) == 4:
-            track_url, artist, title, length = info  # type: str, str, str, int
+            track_url, artist, title, length = info
             alt = None
         else:
-            track_url, artist, title, length, alt = info  # type: str, str, str, int, bool
+            track_url, artist, title, length, alt = info
 
         return TrackInfo(
             title,
@@ -60,6 +60,9 @@ class ReleaseInfo:
             year=self.release_date.year,
             month=self.release_date.month,
             day=self.release_date.day,
+            original_year=self.release_date.year,
+            original_month=self.release_date.month,
+            original_day=self.release_date.day,
             label=self.label,
             va=self.va,
             data_source=DATA_SOURCE,
@@ -85,7 +88,7 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
             "va": False,
         }
     )
-    info.standalone_trackinfo = TrackInfo(
+    info.singleton = TrackInfo(
         info.album,
         url,
         length=421,
@@ -98,7 +101,8 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-def single_track() -> Tuple[str, ReleaseInfo]:
+@pytest.fixture
+def single_track_album_search() -> Tuple[str, ReleaseInfo]:
     """Single track which is part of an album release."""
     test_html_file = "tests/single_track.html"
     album_url = "https://sinensis-ute.bandcamp.com/album/sine03"
@@ -257,7 +261,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file, "r", "utf-8").read(), info
 
 
-@pytest.fixture(params=[single_track, album, compilation])
+@pytest.fixture(params=[album, compilation])
 def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
 
