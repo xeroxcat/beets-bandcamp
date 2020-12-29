@@ -31,7 +31,7 @@ TRACK_FIELDS = {
     # "medium_total",
     # "release_track_id",
     "title",
-    # TODO: "track_alt",
+    "track_alt",
     "track_id",
 }
 

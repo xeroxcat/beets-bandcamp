@@ -29,26 +29,33 @@ class ReleaseInfo:
     def albuminfo(self) -> AlbumInfo:
         return self._albuminfo
 
-    def set_albuminfo(self, url: str, tracks: List[TrackInfo]) -> None:
-        trackinfos = [
-            TrackInfo(
-                title,
-                track_url,
-                index=index,
-                length=length,
-                data_url=track_url,
-                artist=artist,
-                data_source=DATA_SOURCE,
-                media=MEDIA,
-            )
-            for index, (track_url, artist, title, length) in enumerate(tracks, 1)
-        ]
+    @staticmethod
+    def trackinfo(index: int, info: Tuple) -> TrackInfo:
+        if len(info) == 4:
+            track_url, artist, title, length = info  # type: str, str, str, int
+            alt = None
+        else:
+            track_url, artist, title, length, alt = info  # type: str, str, str, int, bool
+
+        return TrackInfo(
+            title,
+            track_url,
+            index=index,
+            length=length,
+            data_url=track_url,
+            artist=artist,
+            track_alt=alt,
+            data_source=DATA_SOURCE,
+            media=MEDIA,
+        )
+
+    def set_albuminfo(self, url: str, tracks: List[Tuple]) -> None:
         self._albuminfo = AlbumInfo(
             self.album,
             url,
             self.album_artist,
             url,  # TODO: check mb instead
-            trackinfos,
+            tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
             data_url=url,
             year=self.release_date.year,
             month=self.release_date.month,
@@ -145,6 +152,71 @@ def album() -> Tuple[str, ReleaseInfo]:
         (f"{turl}/parallell", album_artist, "Parallell", 487),
         (f"{turl}/formulae", album_artist, "Formulae", 431),
         (f"{turl}/biotope", album_artist, "Biotope", 421),
+    ]
+    info.set_albuminfo(url, tracks)
+    return codecs.open(test_html_file, "r", "utf-8").read(), info
+
+
+def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
+    """An album with alternative track indexes."""
+    test_html_file = "tests/track_alt.html"
+    url = "https://foldrecords.bandcamp.com/album/fld001-gareth-wild-common-assault-ep"
+    info = ReleaseInfo(
+        **{
+            "type": "Product, MusicRelease",
+            "image": "https://f4.bcbits.com/img/a2798384948_10.jpg",
+            "album": "FLD001 // Gareth Wild - Common Assault EP",
+            "album_artist": "Gareth Wild",
+            "label": "Fold Records",
+            "release_date": date(2020, 11, 29),
+            "track_count": 6,
+            "va": False,
+        }
+    )
+    turl = "https://foldrecords.bandcamp.com/track"
+    tracks = [
+        (
+            f"{turl}/a1-gareth-wild-live-wire",
+            "Gareth Wild",
+            "Live Wire",
+            357,
+            "A1",
+        ),
+        (
+            f"{turl}/a2-gareth-wild-live-wire-roll-dann-remix",
+            "Gareth Wild",
+            "Live Wire ( Roll Dann Remix )",
+            351,
+            "A2",
+        ),
+        (
+            f"{turl}/a3-gareth-wild-dds-locked-groove",
+            "Gareth Wild",
+            "DDS [Locked Groove]",
+            20,
+            "A3",
+        ),
+        (
+            f"{turl}/aa1-gareth-wild-common-assault",
+            "Gareth Wild",
+            "Common Assault",
+            315,
+            "AA1",
+        ),
+        (
+            f"{turl}/aa2-gareth-wild-saturn-storm",
+            "Gareth Wild",
+            "Saturn Storm",
+            365,
+            "AA2",
+        ),
+        (
+            f"{turl}/aa3-gareth-wild-quadrant-locked-groove",
+            "Gareth Wild",
+            "Quadrant [Locked Groove]",
+            414,
+            "AA3",
+        ),
     ]
     info.set_albuminfo(url, tracks)
     return codecs.open(test_html_file, "r", "utf-8").read(), info

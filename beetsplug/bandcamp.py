@@ -63,6 +63,15 @@ META_LABEL_PAT = r'og:site_name".*content="([^"]*)"'
 META_RELEASE_DATE_PAT = r" released (.*)"
 META_DATE_FORMAT = "%d %B %Y"
 
+# track_alt and artist are optional in the track name
+TRACK_NAME_PAT = re.compile(
+    r"""
+((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w\d]*)?
+((?P<artist>[^-]*\w)\s?-\s?)?
+(?P<title>.*)""",
+    re.VERBOSE,
+)
+
 TRACK_SPLIT = "-"
 
 
@@ -120,15 +129,24 @@ class Metaguru:
         _type = self.meta.get("@type")
         return ", ".join(_type) if isinstance(_type, list) else str(_type)
 
+    def _parse_track_name(self, name: str) -> Dict[str, str]:
+        match = re.search(TRACK_NAME_PAT, name)
+        if not match:  # backup option
+            artist, _, title = name.rpartition(TRACK_SPLIT)
+            data = {"artist": artist.strip(), "title": title.strip()}
+        else:
+            data = match.groupdict()
+
+        if not data.get("artist"):
+            data["artist"] = self.album_artist
+        return data
+
     @property
     def tracks(self) -> List[JSONDict]:
         _tracks = []
         for raw_track in self.meta.get("track", {}).get("itemListElement"):
             track = raw_track.get("item")
-            name = track.get("name", "")
-            artist, _, title = name.rpartition(TRACK_SPLIT)
-            track["artist"] = artist.strip() or self.album_artist
-            track["title"] = title.strip()
+            track.update(self._parse_track_name(track.get("name", "")))
             track["position"] = raw_track.get("position")
             _tracks.append(track)
 
@@ -149,6 +167,7 @@ class Metaguru:
             length=floor(self.meta.get("duration_secs", 0)) or None,
             artist=self.album_artist,
             artist_id=self.url,
+            # track_alt=track.get("track_alt"),
             data_url=self.url,
             **COMMON,
         )
@@ -163,6 +182,7 @@ class Metaguru:
                 length=floor(track.get("duration_secs", 0)) or None,
                 data_url=track.get("url"),
                 artist=track.get("artist"),
+                track_alt=track.get("track_alt"),
                 **COMMON,
             )
             for track in self.tracks
@@ -202,12 +222,12 @@ class BandcampRequestsHandler:
         """Return text contents of the url response."""
         headers = {"User-Agent": USER_AGENT}
         try:
-            r = requests.get(url, headers=headers)
-            r.raise_for_status()
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
         except requests.exceptions.RequestException:
             self._exc("Communication error while fetching URL: {}", url)
             return None
-        return r.text
+        return response.text
 
 
 class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
