@@ -19,6 +19,10 @@ Configuration
 -------------
 
 *
+  **min_candidates** How many candidates it fetches from through the search.
+  Default: ``6``.
+
+*
   **lyrics** If this is ``true`` the plugin will add lyrics to the tracks if
   they are available. Default is ``false``.
 
@@ -27,14 +31,6 @@ Configuration
   `FetchArt <http://beets.readthedocs.org/en/latest/plugins/fetchart.html>`_
   plugin to download album art for bandcamp albums (you need to enable the
   FetchArt plugin).  Default is ``false``.
-
-*
-  **split_artist_title** If this is ``true`` the plugin will try to split the
-  title on `` - `` using the first part as artist and the rest as title.
-  This can be useful for compilation albums, although you may still need to use
-  the edit Candidates option of the
-  `edit <https://beets.readthedocs.io/en/latest/plugins/edit.html>`_ plugin.
-  Default is ``false``.
 
 Usage
 -----

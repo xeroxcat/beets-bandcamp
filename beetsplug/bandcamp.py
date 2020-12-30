@@ -41,7 +41,7 @@ JSONDict = Dict[str, Any]
 
 DEFAULT_CONFIG: JSONDict = {
     "source_weight": 0.5,
-    "min_candidates": 5,
+    "min_candidates": 7,
     "lyrics": False,
     "art": False,
 }
@@ -70,8 +70,8 @@ RELEASE_DATE_PAT = re.compile(r" released (.*)")
 # track_alt and artist are optional in the track name
 TRACK_NAME_PAT = re.compile(
     r"""
-((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w\d]*)?
-((?P<artist>[^-]*\w)\s?-\s?)?
+((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w]*)?
+((?P<artist>[^-]*[^ ])\s?-\s?)?
 (?P<title>.*)""",
     re.VERBOSE,
 )
@@ -169,16 +169,14 @@ class Metaguru:
             return "ep"
         return "album"
 
-    def _parse_track_name(self, name: str) -> Dict[str, str]:
+    @staticmethod
+    def parse_track_name(name: str) -> Dict[str, str]:
         match = re.search(TRACK_NAME_PAT, name)
         if not match:  # backup option
             artist, _, title = name.rpartition(TRACK_SPLIT)
             data = {"artist": artist.strip(), "title": title.strip()}
         else:
             data = match.groupdict()
-
-        if not data.get("artist"):
-            data["artist"] = self.albumartist
         return data
 
     @property
@@ -191,7 +189,9 @@ class Metaguru:
         tracks = []
         for raw_track in raw_tracks:
             track = raw_track["item"]
-            track.update(self._parse_track_name(track["name"]))
+            track.update(self.parse_track_name(track["name"]))
+            if not track.get("artist"):
+                track["artist"] = self.albumartist
             track["position"] = raw_track["position"]
             tracks.append(track)
 
@@ -199,14 +199,14 @@ class Metaguru:
 
     @property
     def singleton(self) -> TrackInfo:
-        track = self._parse_track_name(self.album)
+        track = self.parse_track_name(self.album)
         return TrackInfo(
             track["title"],
             self.album_id,
             index=1,
             length=floor(self.meta.get("duration_secs", 0)) or None,
             data_url=self.album_id,
-            artist=track.get("artist", ""),
+            artist=track.get("artist", self.albumartist),
             artist_id=self.artist_id,
             track_alt=track.get("track_alt", ""),
             **COMMON,

@@ -133,6 +133,33 @@ def test_track_url_while_searching_album(single_track_album_search):
 
 
 @pytest.mark.parsing
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        (
+            "A1. Artist - Title",
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+        ),
+        (
+            "A1- Artist - Title",
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+        ),
+        (
+            "A1.- Artist - Title",
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+        ),
+        (
+            "DJ BEVERLY HILL$ - Raw Steeze",
+            {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
+        ),
+    ],
+)
+def test_parse_track_name(name, expected):
+    actual = Metaguru.parse_track_name(name)
+    assert actual == expected
+
+
+@pytest.mark.parsing
 def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
