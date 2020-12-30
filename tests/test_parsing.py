@@ -69,8 +69,8 @@ def check_album(actual: AlbumInfo, expected: AlbumInfo) -> None:
 
         expected.tracks.sort(key=lambda t: t.index)
         actual.tracks.sort(key=lambda t: t.index)
-        for n, expected_track in enumerate(expected.tracks):
-            assert vars(actual.tracks[n]) == vars(expected_track)
+        for idx, expected_track in enumerate(expected.tracks):
+            assert vars(actual.tracks[idx]) == vars(expected_track)
 
 
 @pytest.mark.need_connection
@@ -113,7 +113,7 @@ def test_search():
 def test_get_single_track_album(single_track_release):
     _, expected = single_track_release
     expected_track = expected.singleton
-    url = "https://mega-tech.bandcamp.com/track/matriark-arangel"
+    url = expected.album_id
 
     plugin = BandcampPlugin()
     actual = plugin.get_track_info(url)
@@ -125,7 +125,7 @@ def test_get_single_track_album(single_track_release):
 @pytest.mark.need_connection
 def test_track_url_while_searching_album(single_track_album_search):
     _, expected = single_track_album_search
-    url = "https://sinensis-ute.bandcamp.com/track/live-at-parken"
+    url = expected.album_id
 
     plugin = BandcampPlugin()
     actual = plugin.get_album_info(url)
@@ -143,24 +143,9 @@ def test_parse_single_track_release(single_track_release):
     assert vars(guru.singleton) == vars(expected.singleton)
 
 
-@pytest.mark.dev
 @pytest.mark.parsing
 def test_parse_album_or_comp(multitracks):
     html, expected = multitracks
     guru = Metaguru(html)
-    guru.tracks
-    for field in COMMON_FIELDS:
-        assert getattr(guru, field) == getattr(expected, field)
 
-    assert len(guru.tracks) == expected.track_count
-
-    for field in ALBUM_FIELDS:
-        if field == "tracks":
-            assert hasattr(guru.albuminfo, "tracks")
-
-            expected.albuminfo.tracks.sort(key=lambda t: t.index)
-            guru.albuminfo.tracks.sort(key=lambda t: t.index)
-            for n, expected_track in enumerate(expected.albuminfo.tracks):
-                assert vars(guru.albuminfo.tracks[n]) == vars(expected_track)
-        else:
-            assert getattr(guru.albuminfo, field) == getattr(expected.albuminfo, field)
+    check_album(guru.albuminfo, expected.albuminfo)
