@@ -7,7 +7,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug.bandcamp import ALBUM_STATUS, COUNTRY, DATA_SOURCE, MEDIA
+from beetsplug.bandcamp import ALBUM_STATUS, DATA_SOURCE, MEDIA
 
 # mypy: no-warn-return-any
 
@@ -29,7 +29,6 @@ class ReleaseInfo:
             alt = None
         else:
             track_id, artist, title, length, alt = info
-
         track_url = f"{self.artist_id}/track/{track_id}"
 
         return TrackInfo(
@@ -52,6 +51,7 @@ class ReleaseInfo:
             artist=artist,
             artist_id=self.artist_id,
             length=length,
+            index=1,
             data_url=self.album_id,
             data_source=DATA_SOURCE,
             media=MEDIA,
@@ -76,10 +76,10 @@ class ReleaseInfo:
             va=data["va"],
             albumtype=data["albumtype"],
             catalognum=data["catalognum"],
+            country=data["country"],
             albumstatus=ALBUM_STATUS,
             data_source=DATA_SOURCE,
             media=MEDIA,
-            country=COUNTRY,
         )
 
 
@@ -93,7 +93,7 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
         album_id="https://mega-tech.bandcamp.com/track/matriark-arangel",
         track_count=1,
     )
-    info.set_singleton("Matriark", "Arangel", 421)
+    info.set_singleton(artist="Matriark", title="Arangel", length=421)
     return codecs.open(test_html_file).read(), info
 
 
@@ -121,6 +121,7 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         catalognum="SINE03",
         release_date=date(2020, 6, 16),
         va=False,
+        country="NO",
     )
     return codecs.open(test_html_file).read(), info
 
@@ -155,6 +156,7 @@ def album() -> Tuple[str, ReleaseInfo]:
         label="Ute.Rec",
         release_date=date(2020, 7, 17),
         va=False,
+        country="NO",
     )
     return codecs.open(test_html_file).read(), info
 
@@ -222,6 +224,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         label="Fold Records",
         release_date=date(2020, 11, 29),
         va=False,
+        country="UK",
     )
     return codecs.open(test_html_file).read(), info
 
@@ -258,6 +261,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
         label="Ismus",
         release_date=date(2020, 11, 29),
         va=True,
+        country="DE",
     )
     return codecs.open(test_html_file).read(), info
 

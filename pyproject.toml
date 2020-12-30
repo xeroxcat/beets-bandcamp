@@ -17,6 +17,7 @@ python = "^3.6"
 beets = ">=1.4.6"
 requests = "*"
 cached-property = "^1.5.2"
+pycountry = "^20.7.3"
 
 [tool.poetry.dev-dependencies]
 dataclasses = "*"

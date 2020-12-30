@@ -8,7 +8,7 @@ from beetsplug.bandcamp import BandcampPlugin, Metaguru
 COMMON_FIELDS = ["image", "album_id", "artist_id"]
 TRACK_FIELDS = {
     "artist",
-    # TODO: "artist_credit",  # the original version ... RR4
+    # "artist_credit",  # the original version ... RR4
     "artist_id",
     "data_source",
     "data_url",

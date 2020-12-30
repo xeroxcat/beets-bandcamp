@@ -33,6 +33,7 @@ from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
 from beets.library import Item
 from cached_property import cached_property
+from pycountry import countries
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
@@ -52,7 +53,7 @@ ALBUM = "album"
 ARTIST = "band"
 TRACK = "track"
 
-COUNTRY = "XW"
+DEFAULT_COUNTRY = "XW"
 MEDIA = "Digital Media"
 ALBUM_STATUS = "Official"
 DATA_SOURCE = "bandcamp"
@@ -62,10 +63,10 @@ TRACK_SPLIT = "-"
 DATE_FORMAT = "%d %B %Y"
 BLOCK_PAT = re.compile(r".*datePublished.*", flags=re.MULTILINE)
 CATALOGNUM_PAT = re.compile(r"^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?")
+COUNTRY_PAT = re.compile(r'">(?P<city>[^,]*), (?P<country>[A-Z][a-z]*)<')
 LABEL_PAT = re.compile(r'og:site_name".*content="([^"]*)"')
 LYRICS_PAT = re.compile(r'"lyrics":({[^}]*})')
 RELEASE_DATE_PAT = re.compile(r" released (.*)")
-
 # track_alt and artist are optional in the track name
 TRACK_NAME_PAT = re.compile(
     r"""
@@ -124,6 +125,16 @@ class Metaguru:
         return match.groups()[0] if match else None
 
     @cached_property
+    def country(self) -> str:
+        match = re.search(COUNTRY_PAT, self.html)
+        if not match:
+            return DEFAULT_COUNTRY
+        try:
+            return countries.lookup(match.groupdict()["country"]).alpha_2
+        except LookupError:
+            return DEFAULT_COUNTRY
+
+    @cached_property
     def lyrics(self) -> Optional[str]:
         matches = re.findall(LYRICS_PAT, self.html)
         if not matches:
@@ -136,6 +147,26 @@ class Metaguru:
         if not match:
             return None
         return datetime.strptime(match.groups()[0], DATE_FORMAT).date()
+
+    @cached_property
+    def is_compilation(self) -> bool:
+        artists = {track["artist"] for track in self.tracks}
+        if len(artists) == 1 and artists.pop() == self.albumartist:
+            return False
+        return True
+
+    @cached_property
+    def catalognum(self) -> str:
+        match = re.search(CATALOGNUM_PAT, self.album)
+        return match.group() if match else ""  # type: ignore
+
+    @cached_property
+    def albumtype(self) -> str:
+        if self.is_compilation:
+            return "compilation"
+        if self.catalognum:
+            return "ep"
+        return "album"
 
     def _parse_track_name(self, name: str) -> Dict[str, str]:
         match = re.search(TRACK_NAME_PAT, name)
@@ -165,36 +196,18 @@ class Metaguru:
 
         return tracks
 
-    @cached_property
-    def is_compilation(self) -> bool:
-        artists = {track["artist"] for track in self.tracks}
-        if len(artists) == 1 and artists.pop() == self.albumartist:
-            return False
-        return True
-
-    @cached_property
-    def catalognum(self) -> str:
-        match = re.search(CATALOGNUM_PAT, self.album)
-        return match.group() if match else ""  # type: ignore
-
-    @cached_property
-    def albumtype(self) -> str:
-        if self.is_compilation:
-            return "compilation"
-        if self.catalognum:
-            return "ep"
-        return "album"
-
     @property
     def singleton(self) -> TrackInfo:
-        track_data = self._parse_track_name(self.album)
+        track = self._parse_track_name(self.album)
         return TrackInfo(
-            track_data["title"],
+            track["title"],
             self.album_id,
+            index=1,
             length=floor(self.meta.get("duration_secs", 0)) or None,
-            artist=track_data["artist"],
-            artist_id=self.artist_id,
             data_url=self.album_id,
+            artist=track.get("artist", ""),
+            artist_id=self.artist_id,
+            track_alt=track.get("track_alt", ""),
             **COMMON,
         )
 
@@ -235,7 +248,7 @@ class Metaguru:
             albumtype=self.albumtype,
             data_url=self.album_id,
             albumstatus=ALBUM_STATUS,
-            country=COUNTRY,
+            country=self.country,
             **COMMON,
         )
 
