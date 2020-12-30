@@ -211,7 +211,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
             "aa3-gareth-wild-quadrant-locked-groove",
             "Gareth Wild",
             "Quadrant [Locked Groove]",
-            414,
+            20,
             "AA3",
         ),
     ]
@@ -221,10 +221,10 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         albumartist="Gareth Wild",
         albumtype="ep",
         catalognum="FLD001",
-        label="Fold Records",
-        release_date=date(2020, 11, 29),
+        label="FOLD RECORDS",
+        release_date=date(2020, 11, 2),
         va=False,
-        country="UK",
+        country="GB",
     )
     return codecs.open(test_html_file).read(), info
 
@@ -266,7 +266,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file).read(), info
 
 
-@pytest.fixture(params=[album, compilation])
+@pytest.fixture(params=[album, album_with_track_alt, compilation])
 def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
 

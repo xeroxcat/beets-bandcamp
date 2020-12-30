@@ -63,7 +63,7 @@ TRACK_SPLIT = "-"
 DATE_FORMAT = "%d %B %Y"
 BLOCK_PAT = re.compile(r".*datePublished.*", flags=re.MULTILINE)
 CATALOGNUM_PAT = re.compile(r"^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?")
-COUNTRY_PAT = re.compile(r'">(?P<city>[^,]*), (?P<country>[A-Z][a-z]*)<')
+COUNTRY_PAT = re.compile(r'">(?P<city>[^,]*), (?P<country>UK|[A-Z][a-z]*)<')
 LABEL_PAT = re.compile(r'og:site_name".*content="([^"]*)"')
 LYRICS_PAT = re.compile(r'"lyrics":({[^}]*})')
 RELEASE_DATE_PAT = re.compile(r" released (.*)")
@@ -130,7 +130,8 @@ class Metaguru:
         if not match:
             return DEFAULT_COUNTRY
         try:
-            return countries.lookup(match.groupdict()["country"]).alpha_2
+            country = match.groupdict()["country"]
+            return "GB" if country == "UK" else countries.lookup(country).alpha_2
         except LookupError:
             return DEFAULT_COUNTRY
 
