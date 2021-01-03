@@ -19,18 +19,14 @@ Configuration
 -------------
 
 *
-  **min_candidates** How many candidates it fetches from through the search.
-  Default: ``6``.
+  **min_candidates** (Default: ``6``). How many candidates to fetch through the search.
 
 *
-  **lyrics** If this is ``true`` the plugin will add lyrics to the tracks if
-  they are available. Default is ``false``.
+  **lyrics** (Default: ``false``). Add lyrics to the tracks if they are available.
 
 *
-  **art** If this is ``true`` the plugin will add a source to the
-  `FetchArt <http://beets.readthedocs.org/en/latest/plugins/fetchart.html>`_
-  plugin to download album art for bandcamp albums (you need to enable the
-  FetchArt plugin).  Default is ``false``.
+  **art** (Default: ``false``). Add a source to the `FetchArt <http://beets.readthedocs.org/en/latest/plugins/fetchart.html>`_
+  plugin to download album art for bandcamp albums (requires ``FetchArt`` plugin enabled as well).
 
 Usage
 -----
