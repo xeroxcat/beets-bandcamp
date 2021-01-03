@@ -9,7 +9,6 @@ from beets.autotag.hooks import AlbumInfo, TrackInfo
 
 from beetsplug.bandcamp import ALBUM_STATUS, DATA_SOURCE, MEDIA
 
-# mypy: no-warn-return-any
 
 JSONDict = Dict[str, Any]
 
@@ -269,11 +268,3 @@ def compilation() -> Tuple[str, ReleaseInfo]:
 @pytest.fixture(params=[album, album_with_track_alt, compilation])
 def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()
-
-
-# One track release: "https://mega-tech.bandcamp.com/track/matriark-arangel"
-# Album: https://ute-rec.bandcamp.com/album/ute004"
-# Compilation: https://ismusberlin.bandcamp.com/album/ismva0033
-# Single track from EP (1hr long) https://sinensis-ute.bandcamp.com/track/live-at-parken
-# Single track from comp: https://ismusberlin.bandcamp.com/track/zwyrg-point-of-no-return-original-mix  # noqa
-# Single track release: https://lowincomesquad.bandcamp.com/track/li-ingle009-ytp-how-much-do-u-fucking-like-acid  # noqa
