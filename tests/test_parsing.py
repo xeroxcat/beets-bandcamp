@@ -62,6 +62,14 @@ ALBUM_FIELDS = [
     ("name", "expected"),
     [
         (
+            "Title",
+            {"track_alt": None, "artist": None, "title": "Title"},
+        ),
+        (
+            "Artist - Title",
+            {"track_alt": None, "artist": "Artist", "title": "Title"},
+        ),
+        (
             "A1. Artist - Title",
             {"track_alt": "A1", "artist": "Artist", "title": "Title"},
         ),
@@ -95,6 +103,7 @@ def test_parse_track_name(name, expected):
         ("Seattle, Washington", "US"),
         ("Los Angeles, California", "US"),
         ("New York", "US"),
+        ("", "XW"),
     ],
 )
 def test_parse_country(name, expected):
