@@ -14,6 +14,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 """Adds bandcamp album search support to the autotagger."""
+# TODO: Add changelog
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
@@ -33,7 +34,7 @@ from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
 from beets.library import Item
 from cached_property import cached_property
-from pycountry import countries
+from pycountry import countries, subdivisions
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
@@ -54,6 +55,7 @@ ARTIST = "band"
 TRACK = "track"
 
 DEFAULT_COUNTRY = "XW"
+COUNTRY_OVERRIDES = {"UK": "GB"}
 MEDIA = "Digital Media"
 ALBUM_STATUS = "Official"
 DATA_SOURCE = "bandcamp"
@@ -63,7 +65,7 @@ TRACK_SPLIT = "-"
 DATE_FORMAT = "%d %B %Y"
 BLOCK_PAT = re.compile(r".*datePublished.*", flags=re.MULTILINE)
 CATALOGNUM_PAT = re.compile(r"^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?")
-COUNTRY_PAT = re.compile(r'">(?P<city>[^,]*), (?P<country>UK|[A-Z][a-z]*)<')
+COUNTRY_PAT = re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}')
 LABEL_PAT = re.compile(r'og:site_name".*content="([^"]*)"')
 LYRICS_PAT = re.compile(r'"lyrics":({[^}]*})')
 RELEASE_DATE_PAT = re.compile(r" released (.*)")
@@ -94,27 +96,27 @@ class Metaguru:
         if match:
             self.meta = json.loads(match.group())
 
-    @cached_property
+    @property
     def album(self) -> str:
-        return self.meta["name"]  # type: ignore
+        return self.meta["name"]
 
-    @cached_property
+    @property
     def albumartist(self) -> str:
-        return self.meta["byArtist"]["name"]  # type: ignore
+        return self.meta["byArtist"]["name"]
 
-    @cached_property
+    @property
     def album_url_from_track(self) -> str:
-        return self.meta["inAlbum"]["@id"]  # type: ignore
+        return self.meta["inAlbum"]["@id"]
 
-    @cached_property
+    @property
     def album_id(self) -> str:
-        return self.meta["@id"]  # type: ignore
+        return self.meta["@id"]
 
-    @cached_property
+    @property
     def artist_id(self) -> str:
-        return self.meta["byArtist"]["@id"]  # type: ignore
+        return self.meta["byArtist"]["@id"]
 
-    @cached_property
+    @property
     def image(self) -> str:
         image = self.meta.get("image", "")
         return str(image[0] if isinstance(image, list) else image)
@@ -123,17 +125,6 @@ class Metaguru:
     def label(self) -> Optional[str]:
         match = re.search(LABEL_PAT, self.html)
         return match.groups()[0] if match else None
-
-    @cached_property
-    def country(self) -> str:
-        match = re.search(COUNTRY_PAT, self.html)
-        if not match:
-            return DEFAULT_COUNTRY
-        try:
-            country = match.groupdict()["country"]
-            return "GB" if country == "UK" else countries.lookup(country).alpha_2
-        except LookupError:
-            return DEFAULT_COUNTRY
 
     @cached_property
     def lyrics(self) -> Optional[str]:
@@ -158,8 +149,9 @@ class Metaguru:
 
     @cached_property
     def catalognum(self) -> str:
+        # TODO: CHeck for LP
         match = re.search(CATALOGNUM_PAT, self.album)
-        return match.group() if match else ""  # type: ignore
+        return match.group() if match else ""
 
     @cached_property
     def albumtype(self) -> str:
@@ -170,16 +162,34 @@ class Metaguru:
         return "album"
 
     @staticmethod
+    def parse_country(html: str) -> str:
+        match = re.search(COUNTRY_PAT, html)
+        if not match:
+            return DEFAULT_COUNTRY
+        country = match.groups()[-1]
+        return (
+            COUNTRY_OVERRIDES.get(country)
+            or getattr(countries.get(name=country, default=object), "alpha_2", None)
+            or subdivisions.lookup(country).country_code
+        )
+
+    @cached_property
+    def country(self) -> str:
+        try:
+            return self.parse_country(self.html)
+        except LookupError:
+            return DEFAULT_COUNTRY
+
+    @staticmethod
     def parse_track_name(name: str) -> Dict[str, str]:
         match = re.search(TRACK_NAME_PAT, name)
-        if not match:  # backup option
-            artist, _, title = name.rpartition(TRACK_SPLIT)
-            data = {"artist": artist.strip(), "title": title.strip()}
-        else:
-            data = match.groupdict()
-        return data
+        if match:
+            return match.groupdict()
+        # backup option
+        artist, _, title = name.rpartition(TRACK_SPLIT)
+        return {"artist": artist.strip(), "title": title.strip()}
 
-    @property
+    @cached_property
     def tracks(self) -> List[JSONDict]:
         try:
             raw_tracks = self.meta["track"]["itemListElement"]
@@ -378,6 +388,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def item_candidates(self, item, artist, title):
         # type: (Item, str, str) -> List[TrackInfo]
         """Return a list of tracks from a bandcamp search matching a singleton."""
+        # TODO: Handle combos
         query = title or item.album or artist
         return list(filter(truth, map(self.get_track_info, self._search(query, TRACK))))
 

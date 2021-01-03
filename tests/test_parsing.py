@@ -84,6 +84,33 @@ def test_parse_track_name(name, expected):
     assert actual == expected
 
 
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Berlin, Germany", "DE"),
+        ("Oslo, Norway", "NO"),
+        ("London, UK", "GB"),
+        ("Malmö, Sweden", "SE"),
+        ("UK", "GB"),
+        ("Seattle, Washington", "US"),
+        ("Los Angeles, California", "US"),
+        ("New York", "US"),
+    ],
+)
+def test_parse_country(name, expected):
+    line = f'<span class="location secondaryText">{name}</span>'
+    actual = Metaguru.parse_country(line)
+    assert actual == expected
+
+
+def test_handles_nonexistent_country():
+    name = "No Ones, Land"
+    expected = "XW"
+    line = f'<span class="location secondaryText">{name}</span>'
+    actual = Metaguru(line).country
+    assert actual == expected
+
+
 def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)

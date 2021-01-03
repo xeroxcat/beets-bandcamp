@@ -54,17 +54,17 @@ def test_get_single_track_album(single_track_release):
 def test_track_url_while_searching_album(single_track_album_search):
     """If a `track` url was given as the Id searching for an `album`, the
     plugin handles this and returns the album in question."""
-    _, expected_release = single_track_album_search
+    track_url, expected_release = single_track_album_search
     expected = expected_release.albuminfo
-    url = expected.album_id
 
     plugin = BandcampPlugin()
-    actual = plugin.get_album_info(url)
+    actual = plugin.get_album_info(track_url)
 
     expected.tracks.sort(key=lambda t: t.index)
     actual.tracks.sort(key=lambda t: t.index)
     for actual_track, expected_track in zip(actual.tracks, expected.tracks):
         assert vars(actual_track) == vars(expected_track)
+
     actual.tracks = None
     expected.tracks = None
     assert vars(actual) == vars(expected)

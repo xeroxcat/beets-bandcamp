@@ -99,8 +99,8 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
 @pytest.fixture
 def single_track_album_search() -> Tuple[str, ReleaseInfo]:
     """Single track which is part of an album release."""
-    test_html_file = "tests/single_track.html"
     album_artist = "Alpha Tracks"
+    track_url = "https://sinensis-ute.bandcamp.com/track/odondo"
     info = ReleaseInfo(
         image="https://f4.bcbits.com/img/a0610664056_10.jpg",
         artist_id="https://sinensis-ute.bandcamp.com",
@@ -122,7 +122,7 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         va=False,
         country="NO",
     )
-    return codecs.open(test_html_file).read(), info
+    return track_url, info
 
 
 def album() -> Tuple[str, ReleaseInfo]:
