@@ -2,7 +2,7 @@ import json
 import re
 from datetime import date, datetime
 from math import floor
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Pattern
 
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from cached_property import cached_property
@@ -20,7 +20,7 @@ COMMON = {"data_source": DATA_SOURCE, "media": MEDIA}
 TRACK_SPLIT = "-"
 DATE_FORMAT = "%d %B %Y"
 BLOCK_PAT = re.compile(r".*datePublished.*", flags=re.MULTILINE)
-CATALOGNUM_PAT = re.compile(r"^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?")
+CATALOGNUM_PAT = re.compile(r"(^[^\d\W]+[_\W]?\d+(?:\W\d|CD)?)")
 COUNTRY_PAT = re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}')
 LABEL_PAT = re.compile(r'og:site_name".*content="([^"]*)"')
 LYRICS_PAT = re.compile(r'"lyrics":({[^}]*})')
@@ -52,6 +52,13 @@ class Metaguru:
         if match:
             self.meta = json.loads(match.group())
 
+    def _search(self, what: Pattern[str], where: str = None) -> Optional[str]:
+        if where:
+            match = re.search(what, where)
+        else:
+            match = re.search(what, self.html)
+        return match.groups()[0] if match else None
+
     @property
     def album(self) -> str:
         return self.meta["name"]
@@ -79,8 +86,7 @@ class Metaguru:
 
     @cached_property
     def label(self) -> Optional[str]:
-        match = re.search(LABEL_PAT, self.html)
-        return match.groups()[0] if match else None
+        return self._search(LABEL_PAT)
 
     @cached_property
     def lyrics(self) -> Optional[str]:
@@ -91,10 +97,8 @@ class Metaguru:
 
     @cached_property
     def release_date(self) -> Optional[date]:
-        match = re.search(RELEASE_DATE_PAT, self.html)
-        if not match:
-            return None
-        return datetime.strptime(match.groups()[0], DATE_FORMAT).date()
+        date = self._search(RELEASE_DATE_PAT)
+        return datetime.strptime(date, DATE_FORMAT).date() if date else None
 
     @cached_property
     def is_compilation(self) -> bool:
@@ -104,10 +108,8 @@ class Metaguru:
         return True
 
     @cached_property
-    def catalognum(self) -> str:
-        # TODO: CHeck for LP
-        match = re.search(CATALOGNUM_PAT, self.album)
-        return match.group() if match else ""
+    def catalognum(self) -> Optional[str]:
+        return self._search(CATALOGNUM_PAT, self.album)
 
     @cached_property
     def albumtype(self) -> str:
@@ -117,22 +119,15 @@ class Metaguru:
             return "ep"
         return "album"
 
-    @staticmethod
-    def parse_country(html: str) -> str:
-        match = re.search(COUNTRY_PAT, html)
-        if not match:
-            return DEFAULT_COUNTRY
-        country = match.groups()[-1]
-        return (
-            COUNTRY_OVERRIDES.get(country)
-            or getattr(countries.get(name=country, default=object), "alpha_2", None)
-            or subdivisions.lookup(country).country_code
-        )
-
     @cached_property
     def country(self) -> str:
+        country = self._search(COUNTRY_PAT)
         try:
-            return self.parse_country(self.html)
+            return (
+                COUNTRY_OVERRIDES.get(country)  # type: ignore
+                or getattr(countries.get(name=country, default=object), "alpha_2", None)
+                or subdivisions.lookup(country).country_code
+            )
         except LookupError:
             return DEFAULT_COUNTRY
 

@@ -103,18 +103,11 @@ def test_parse_track_name(name, expected):
         ("Seattle, Washington", "US"),
         ("Los Angeles, California", "US"),
         ("New York", "US"),
+        ("No Ones, Land", "XW"),
         ("", "XW"),
     ],
 )
 def test_parse_country(name, expected):
-    line = f'<span class="location secondaryText">{name}</span>'
-    actual = Metaguru.parse_country(line)
-    assert actual == expected
-
-
-def test_handles_nonexistent_country():
-    name = "No Ones, Land"
-    expected = "XW"
     line = f'<span class="location secondaryText">{name}</span>'
     actual = Metaguru(line).country
     assert actual == expected
@@ -141,3 +134,6 @@ def test_parse_album_or_comp(multitracks):
     actual.tracks.sort(key=lambda t: t.index)
     for actual_track, expected_track in zip(actual.tracks, expected.tracks):
         assert vars(actual_track) == vars(expected_track)
+    actual.tracks = None
+    expected.tracks = None
+    assert vars(actual) == vars(expected)
