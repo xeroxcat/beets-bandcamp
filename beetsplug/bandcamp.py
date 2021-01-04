@@ -20,8 +20,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import logging
 import re
+from itertools import chain
 from operator import truth
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set
 
 import beets
 import beets.ui
@@ -31,9 +32,9 @@ from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
 from beets.library import Item
 
-from beetsplug import fetchart  # type: ignore[attr-defined]
+import beetsplug.fetchart as fetchart
 
-from ._metaguru import Metaguru, NoTracklistException, DATA_SOURCE
+from ._metaguru import DATA_SOURCE, Metaguru, urlify
 
 JSONDict = Dict[str, Any]
 
@@ -45,11 +46,12 @@ DEFAULT_CONFIG: JSONDict = {
 }
 
 SEARCH_URL = "https://bandcamp.com/search?q={0}&page={1}"
-SEARCH_ITEM_PAT = 'href="(https://[^/]*/{0}/[^?]*)'
-USER_AGENT = "beets/{0} +http://beets.radbox.org/".format(beets.__version__)
-ALBUM = "album"
-ARTIST = "band"
-TRACK = "track"
+ALBUM_URL_IN_TRACK = re.compile(r'inAlbum":{[^}]*"@id":"([^"]*)"')
+SEARCH_ITEM_PAT = 'href="(https://[^/]*/{}/[^?]*)'
+USER_AGENT = "beets/{} +http://beets.radbox.org/".format(beets.__version__)
+ALBUM_SEARCH = "album"
+ARTIST_SEARCH = "band"
+TRACK_SEARCH = "track"
 
 
 class BandcampRequestsHandler:
@@ -63,44 +65,43 @@ class BandcampRequestsHandler:
     def _info(self, msg_template: str, *args: Sequence[str]) -> None:
         self._log.log(logging.INFO, msg_template, *args, exc_info=False)
 
-    def _get(self, url: str) -> Optional[str]:
+    def _get(self, url: str) -> str:
         """Return text contents of the url response."""
         headers = {"User-Agent": USER_AGENT}
         try:
             response = requests.get(url, headers=headers)
             response.raise_for_status()
         except requests.exceptions.RequestException:
-            self._exc("Communication error while fetching URL: {}", url)
-            return None
+            self._info("Error while fetching URL: {}", url)
+            return ""
         return response.text
 
 
 class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
     NAME = "Bandcamp"
 
-    def get(self, album: AlbumInfo, *_: Sequence[Any]) -> fetchart.Candidate:
+    def get(self, album: AlbumInfo, plugin, paths) -> Iterator[fetchart.Candidate]:
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
+        # TODO: Make this configurable
         if hasattr(album, "art_source") and album.art_source == DATA_SOURCE:
+            url = album.mb_albumid
+            if isinstance(url, six.string_types) and DATA_SOURCE in url:
+                html = self._get(url)
+                if html:
+                    try:
+                        yield self._candidate(
+                            url=Metaguru(html).image, match=fetchart.Candidate.MATCH_EXACT
+                        )
+                    except Exception:
+                        self._info("Unexpected parsing error fetching album art")
+                else:
+                    self._info("Could not connect to the URL")
+            else:
+                self._info("Not fetching art for a non-bandcamp album")
+        else:
             self._info("Art cover is already present")
-            return None
-
-        url = album.mb_albumid
-        if not isinstance(url, six.string_types) or DATA_SOURCE not in url:
-            self._info("Not fetching art for a non-bandcamp album")
-            return None
-
-        html = self._get(url)
-        if not html:
-            return None
-
-        try:
-            image_url = Metaguru(html).image
-            yield self._candidate(url=image_url, match=fetchart.Candidate.MATCH_EXACT)
-        except Exception:
-            self._exc("Unexpected parsing error fetching bandcamp album art")
-        return None
 
 
 class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
@@ -118,25 +119,22 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         """Fetch and store lyrics for a single item. If ``write``, then the
         lyrics will also be written to the file itself.
         """
-        if item.lyrics:
+        if not item.lyrics:
+            html = self._get(item.mb_trackid)
+            if html:
+                lyrics = Metaguru(html).lyrics
+                if lyrics:
+                    self._info("Fetched lyrics: {}", item)
+                    item.lyrics = lyrics
+                    if write:
+                        item.try_write()
+                    item.store()
+                else:
+                    self._info("Lyrics not found: {}", item)
+            else:
+                self._info("Could not reach bandcamp: {}", item)
+        else:
             self._info("Lyrics are already present: {}", item)
-            return None
-
-        html = self._get(item.mb_trackid)
-        if not html:
-            return None
-
-        lyrics = Metaguru(html).lyrics
-        if not lyrics:
-            self._info("Lyrics not found: {}", item)
-            return None
-
-        self._info("Fetched lyrics: {}", item)
-        item.lyrics = lyrics
-        if write:
-            item.try_write()
-        item.store()
-        return None
 
     def imported(self, _: Any, task: Any) -> None:
         """Import hook for fetching lyrics from bandcamp automatically."""
@@ -148,7 +146,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def loaded(self) -> None:
         """Add our own artsource to the fetchart plugin."""
-        # FIXME: This is ugly, but i didn't find another way to extend fetchart
+        # TODO: This is ugly, but i didn't find another way to extend fetchart
         # without declaring a new plugin.
         if self.config["art"]:
             for plugin in plugins.find_plugins():
@@ -168,69 +166,98 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             dist.add("source", self.config["source_weight"].as_number())
         return dist
 
+    def _cheat_mode(self, item: Item, name: str, _type: str) -> Iterator[str]:
+        if "Visit" in item.comments:
+            match = re.search(r"https:[/a-z.-]+com", item.comments)
+            if match:
+                url = match.group() + "/" + _type + "/" + urlify(name)
+                self._info("Trying our guess {} before searching", url)
+                yield url
+
     def candidates(self, items, artist, album, va_likely):
-        # type: (List[Item], str, str, bool) -> List[AlbumInfo]
-        """Return a list of albums given a search query."""
-        return list(filter(truth, map(self.get_album_info, self._search(album, ALBUM))))
+        # type: (List[Item], str, str, bool) -> Iterator[AlbumInfo]
+        """Return a sequence of AlbumInfo objects that match the
+        album whose items are provided.
+        """
+        urls: Iterator
+
+        if items:
+            urls = chain(
+                self._cheat_mode(items[0], album, "album"),
+                self._search(album, ALBUM_SEARCH),
+            )
+        else:
+            urls = self._search(album, ALBUM_SEARCH)
+        return filter(truth, chain.from_iterable(map(self.get_album_info, urls)))
 
     def item_candidates(self, item, artist, title):
-        # type: (Item, str, str) -> List[TrackInfo]
-        """Return a list of tracks from a bandcamp search matching a singleton."""
-        # TODO: Handle combos
-        query = title or item.album or artist
-        return list(filter(truth, map(self.get_track_info, self._search(query, TRACK))))
+        # type: (Item, str, str) -> Iterator[TrackInfo]
+        """Return a sequence of TrackInfo objects that match the provided item.
+        If the track was downloaded directly from bandcamp, it should contain
+        a comment saying 'Visit <label-url>' - we look at this first by converting
+        title into the format that Bandcamp use.
+        """
+        urls = chain(
+            self._cheat_mode(item, title, "track"),
+            self._search(title or item.album or artist, TRACK_SEARCH),
+        )
+        return filter(truth, map(self.get_track_info, urls))
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
-        """Fetch an album by its bandcamp ID and return it if found."""
+        """Fetch an album by its bandcamp ID."""
         return self.get_album_info(album_id)
 
     def track_for_id(self, track_id: str) -> Optional[TrackInfo]:
-        """Fetch a track by its bandcamp ID and return it if found."""
+        """Fetch a track by its bandcamp ID."""
         return self.get_track_info(track_id)
 
-    def get_album_info(self, url: str) -> Optional[AlbumInfo]:
-        """Return an AlbumInfo object for a bandcamp album page."""
+    def get_album_info(self, url: str) -> Iterator[Optional[AlbumInfo]]:
+        """Return an AlbumInfo object for a bandcamp album page.
+        If track url is given by mistake, find and fetch the album url instead.
+        """
         html = self._get(url)
-        if not html:
-            return None
-
-        guru = Metaguru(html)
-        try:
-            return guru.albuminfo
-        except NoTracklistException:
-            self._info("Track URL {} provided, getting the album instead", url)
-            return self.get_album_info(guru.album_url_from_track)
+        if "/track/" in url:
+            match = re.search(ALBUM_URL_IN_TRACK, html)
+            if match:
+                html = self._get(match.groups()[0])
+        if html:
+            return Metaguru(html).albums
+        return iter([None])
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
         html = self._get(url)
         return Metaguru(html).singleton if html else None
 
-    def _search(self, query: str, search_type: str = ALBUM) -> List[str]:
-        """Return a list of URLs for items of type search_type matching the query."""
-        urls: List[str] = []
-        page = 1
-
+    def _search(self, query: str, search_type: str = ALBUM_SEARCH) -> Iterator[str]:
+        """Return an iterator for item URLs of type search_type matching the query."""
         pattern = SEARCH_ITEM_PAT.format(search_type)
         max_urls = self.config["min_candidates"].as_number()
-        while len(urls) < max_urls:
-            self._info("Searching {}, page {}", search_type, str(page))
 
+        urls: Set[str] = set()
+        page = 1
+        html = "page=1"
+
+        def next_page_exists() -> bool:
+            return bool(re.search(rf"page={page}", html))
+
+        self._info("Searching {}s for {}", search_type, query)
+        while next_page_exists():
+            self._info("Page {}", str(page))
             html = self._get(SEARCH_URL.format(query, page))
             if not html:
                 break
 
-            matches = set(re.findall(rf"{pattern}", html))
-            self._info("Found {} {} urls", str(len(matches)), search_type)
-            for url in matches:
-                urls.append(url)
+            for match in re.finditer(pattern, html):
                 if len(urls) == max_urls:
-                    return urls
-
-            # Stop searching if we are on the last page.
-            next_page = page + 1
-            if not re.search(rf"page={next_page}", html):
-                return urls
-            page = next_page
-
-        return urls
+                    break
+                url = match.groups()[0]
+                if url not in urls:
+                    urls.add(url)
+                    self._info("Found URL: {}", url)
+                    yield url
+            else:
+                self._info("{} total URLs", str(len(urls)))
+                page += 1
+                continue
+            break

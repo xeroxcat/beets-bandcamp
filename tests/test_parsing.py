@@ -1,61 +1,20 @@
 import pytest
 
-from beetsplug._metaguru import Metaguru
+from beetsplug._metaguru import Metaguru, urlify
 
 pytestmark = pytest.mark.parsing
 
-COMMON_FIELDS = ["image", "album_id", "artist_id"]
-TRACK_FIELDS = {
-    "artist",
-    # "artist_credit",  # the original version ... RR4
-    "artist_id",
-    "data_source",
-    "data_url",
-    # TODO: "disctitle",
-    "index",
-    "length",
-    # "lyricist",
-    "media",
-    # TODO: "medium",
-    # "medium_index",
-    # "medium_total",
-    # "release_track_id",
-    "title",
-    "track_alt",
-    "track_id",
-}
 
-
-ALBUM_FIELDS = [
-    "album",
-    "album_id",
-    "artist",
-    "artist_id",
-    "tracks",
-    # "asin",
-    "albumtype",
-    "va",
-    "year",
-    "month",
-    "day",
-    "label",
-    # TODO: "mediums",
-    # "releasegroup_id",
-    "catalognum",
-    # "script",
-    # TODO: "language",
-    "country",
-    "albumstatus",
-    "media",
-    # "albumdisambig",
-    # "releasegroupdisambig",
-    # TODO: "artist_credit",
-    "original_year",
-    "original_month",
-    "original_day",
-    "data_source",
-    "data_url",
-]
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("LI$INGLE010 - cyberflex - LEVEL X", "li-ingle010-cyberflex-level-x"),
+        ("LI$INGLE007 - Re:drum - Movin'", "li-ingle007-re-drum-movin"),
+        ("X23 & Høbie - Exhibit A", "x23-h-bie-exhibit-a"),
+    ],
+)
+def test_convert_title(title, expected):
+    assert urlify(title) == expected
 
 
 @pytest.mark.parametrize(
@@ -85,6 +44,10 @@ ALBUM_FIELDS = [
             "DJ BEVERLY HILL$ - Raw Steeze",
             {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
         ),
+        (
+            "LI$INGLE010 - cyberflex - LEVEL X",
+            {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
+        ),
     ],
 )
 def test_parse_track_name(name, expected):
@@ -113,27 +76,58 @@ def test_parse_country(name, expected):
     assert actual == expected
 
 
+@pytest.mark.parametrize(
+    ("album", "expected"),
+    [
+        ("Tracker-229 [PRH-002]", "PRH-002"),
+        ("[PRH-002] Tracker-229", "PRH-002"),
+        ("Tracker-229 PRH-002", "Tracker-229"),
+        ("ISMVA003.2", "ISMVA003.2"),
+        ("UTC003-CD", "UTC003"),
+        ("UTC-003", "UTC-003"),
+        ("EP [SINDEX008]", "SINDEX008"),
+    ],
+)
+def test_parse_catalognum(album, expected):
+    guru = Metaguru("")
+    guru.meta = {"name": album}
+    assert guru.catalognum == expected
+
+
 def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
-
-    for field in COMMON_FIELDS:
-        assert getattr(guru, field) == getattr(expected, field)
 
     assert vars(guru.singleton) == vars(expected.singleton)
 
 
 def test_parse_album_or_comp(multitracks):
     html, expected_release = multitracks
-    expected = expected_release.albuminfo
     guru = Metaguru(html)
-    actual = guru.albuminfo
 
-    assert hasattr(actual, "tracks")
+    expected_disctitles = expected_release.disctitles.values()
+    albums = list(guru.albums)
+
+    assert len(albums) == len(expected_disctitles)
+
+    test_release = None
+    for album in albums:
+        disctitle = album.tracks[0].disctitle
+        assert disctitle in expected_disctitles
+        if album.media == expected_release.media:
+            test_release = album
+
+    expected = expected_release.albuminfo
+
+    assert hasattr(test_release, "tracks")
+    assert len(test_release.tracks) == expected_release.track_count
+
     expected.tracks.sort(key=lambda t: t.index)
-    actual.tracks.sort(key=lambda t: t.index)
-    for actual_track, expected_track in zip(actual.tracks, expected.tracks):
-        assert vars(actual_track) == vars(expected_track)
-    actual.tracks = None
+    test_release.tracks.sort(key=lambda t: t.index)
+
+    for test_release_track, expected_track in zip(test_release.tracks, expected.tracks):
+        assert vars(test_release_track) == vars(expected_track)
+    test_release.tracks = None
     expected.tracks = None
-    assert vars(actual) == vars(expected)
+
+    assert vars(test_release) == vars(expected)

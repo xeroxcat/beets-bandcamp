@@ -7,7 +7,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug._metaguru import ALBUM_STATUS, DATA_SOURCE, MEDIA
+from beetsplug._metaguru import ALBUM_STATUS, DATA_SOURCE
 
 JSONDict = Dict[str, Any]
 
@@ -18,6 +18,8 @@ class ReleaseInfo:
     album_id: str
     artist_id: str
     track_count: int
+    media: str
+    disctitles: Dict[str, str]
     singleton = None  # type: TrackInfo
     albuminfo = None  # type: AlbumInfo
 
@@ -34,12 +36,16 @@ class ReleaseInfo:
             track_url,
             index=index,
             length=length,
-            data_url=track_url,
+            data_url=self.album_id,
             artist=artist,
             artist_id=self.artist_id,
             track_alt=alt,
             data_source=DATA_SOURCE,
-            media=MEDIA,
+            media=self.media,
+            medium=1,
+            medium_index=index,
+            medium_total=self.track_count,
+            disctitle=self.disctitles.get(self.media),
         )
 
     def set_singleton(self, artist: str, title: str, length: int) -> None:
@@ -52,7 +58,7 @@ class ReleaseInfo:
             index=1,
             data_url=self.album_id,
             data_source=DATA_SOURCE,
-            media=MEDIA,
+            media=self.media,
         )
 
     def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
@@ -67,17 +73,15 @@ class ReleaseInfo:
             year=data["release_date"].year,
             month=data["release_date"].month,
             day=data["release_date"].day,
-            original_year=data["release_date"].year,
-            original_month=data["release_date"].month,
-            original_day=data["release_date"].day,
             label=data["label"],
             va=data["va"],
             albumtype=data["albumtype"],
             catalognum=data["catalognum"],
             country=data["country"],
+            mediums=data["mediums"],
             albumstatus=ALBUM_STATUS,
+            media=self.media,
             data_source=DATA_SOURCE,
-            media=MEDIA,
         )
 
 
@@ -90,6 +94,8 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
         artist_id="https://mega-tech.bandcamp.com",
         album_id="https://mega-tech.bandcamp.com/track/matriark-arangel",
         track_count=1,
+        media="Digital Media",
+        disctitles={},
     )
     info.set_singleton(artist="Matriark", title="Arangel", length=421)
     return codecs.open(test_html_file).read(), info
@@ -105,6 +111,8 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         artist_id="https://sinensis-ute.bandcamp.com",
         album_id="https://sinensis-ute.bandcamp.com/album/sine03",
         track_count=2,
+        media="CD",
+        disctitles={"CD": "CD", "Digital Media": ""},
     )
     tracks = [
         ("live-at-parken", album_artist, "Live At PARKEN", 3600),
@@ -120,6 +128,7 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         release_date=date(2020, 6, 16),
         va=False,
         country="NO",
+        mediums=1,
     )
     return track_url, info
 
@@ -133,6 +142,8 @@ def album() -> Tuple[str, ReleaseInfo]:
         artist_id="https://ute-rec.bandcamp.com",
         album_id="https://ute-rec.bandcamp.com/album/ute004",
         track_count=4,
+        media="Vinyl",
+        disctitles={"Vinyl": '12" Vinyl', "Digital Media": "UTE004"},
     )
     tracks = [
         (
@@ -155,6 +166,7 @@ def album() -> Tuple[str, ReleaseInfo]:
         release_date=date(2020, 7, 17),
         va=False,
         country="NO",
+        mediums=1,
     )
     return codecs.open(test_html_file).read(), info
 
@@ -168,6 +180,11 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         artist_id=artist_id,
         album_id=f"{artist_id}/album/fld001-gareth-wild-common-assault-ep",
         track_count=6,
+        media="Vinyl",
+        disctitles={
+            "Vinyl": "FLD001 - Common Assault EP",
+            "Digital Media": "FLD001 // Gareth Wild - Common Assault EP",
+        },
     )
     tracks = [
         (
@@ -223,6 +240,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         release_date=date(2020, 11, 2),
         va=False,
         country="GB",
+        mediums=1,
     )
     return codecs.open(test_html_file).read(), info
 
@@ -235,6 +253,8 @@ def compilation() -> Tuple[str, ReleaseInfo]:
         artist_id="https://ismusberlin.bandcamp.com",
         album_id="https://ismusberlin.bandcamp.com/album/ismva0033",
         track_count=13,
+        media="Digital Media",
+        disctitles={"Digital Media": "ISMVA003.3"},
     )
     tracks = [
         (
@@ -260,10 +280,68 @@ def compilation() -> Tuple[str, ReleaseInfo]:
         release_date=date(2020, 11, 29),
         va=True,
         country="DE",
+        mediums=1,
     )
     return codecs.open(test_html_file).read(), info
 
 
-@pytest.fixture(params=[album, album_with_track_alt, compilation])
+def ep() -> Tuple[str, ReleaseInfo]:
+    """An EP with various artists."""
+    test_html_file = "tests/ep.html"
+    info = ReleaseInfo(
+        image="https://f4.bcbits.com/img/a4292881830_10.jpg",
+        artist_id="https://fallingapart.bandcamp.com",
+        album_id="https://fallingapart.bandcamp.com/album/fa010-kickdown-vienna",
+        track_count=4,
+        media="Vinyl",
+        disctitles={"Vinyl": '12" Vinyl', "Digital Media": "fa010 | Kickdown Vienna"},
+    )
+    tracks = [
+        (
+            "je-nne-the-devils-not-s-bl-ck-s-he-is-p-inted-h-rd-mix",
+            "jeånne",
+            "the devil's not ås blåck ås he is påinted (hård mix)",
+            385,
+        ),
+        (
+            "je-nne-the-p-th-to-p-r-dise-begins-in-hell",
+            "jeånne",
+            "the påth to pårådise begins in hell",
+            333,
+        ),
+        (
+            "dj-disrespect-vienna-warm-up-mix",
+            "DJ DISRESPECT",
+            "VIENNA (WARM UP MIX",
+            315,
+        ),
+        (
+            "dj-disrespect-transition-athletic-mix",
+            "DJ DISRESPECT",
+            "TRANSITION (ATHLETIC MIX)",
+            333,
+        ),
+    ]
+    info.set_albuminfo(
+        tracks,
+        album="fa010 | Kickdown Vienna",
+        albumartist="jeånne, DJ DISRESPECT",
+        albumtype="ep",
+        catalognum="fa010",
+        label="falling apart",
+        release_date=date(2020, 10, 9),
+        va=False,
+        country="DE",
+        mediums=1,
+    )
+    return codecs.open(test_html_file).read(), info
+
+
+@pytest.fixture
+def ep_album(request) -> Tuple[str, ReleaseInfo]:
+    return ep()
+
+
+@pytest.fixture(params=[album, album_with_track_alt, compilation, ep])
 def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()

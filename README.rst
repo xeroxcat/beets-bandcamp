@@ -22,6 +22,11 @@ Configuration
   **min_candidates** (Default: ``6``). How many candidates to fetch through the search.
 
 *
+  **preferred_media** (Default: ``Digital Media``). When fetching albums or tracks *by their ids*,
+  this will be preferred. Can be ``Cassette``, ``CD``, ``Vinyl`` and ``Digital Media``. It defaults
+  to the latter if your preferred media isn't available.
+
+*
   **lyrics** (Default: ``false``). Add lyrics to the tracks if they are available.
 
 *
