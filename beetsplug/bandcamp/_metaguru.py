@@ -51,7 +51,7 @@ PATTERNS = {
         re.VERBOSE,
     ),
     "vinyl_name": re.compile(
-        r'(?P<count>[1-5]|([Ss]ing|[Dd]oub|[Tt]rip)le )( ?x? ?)(?P<type>(7|10|12)" Vinyl)'
+        r'(?P<count>[1-5]|[Ss]ingle|[Dd]ouble|[Tt]riple) ?x? ?((7|10|12)" )?Vinyl'
     ),
 }
 
@@ -155,18 +155,23 @@ class Metaguru:
     def disctitle(self) -> str:
         return self._media["name"]
 
+    @staticmethod
+    def get_vinyl_count(name: str) -> int:
+        conv = {"single": "1", "double": "2", "triple": "3"}
+        match = re.search(PATTERNS["vinyl_name"], name)
+        try:
+            count = match.groupdict()["count"]  # type: ignore
+            if count.isdigit():
+                return int(count)
+            return int(conv.get(count.lower()))  # type: ignore
+        except AttributeError:
+            return 1
+
     @cached_property
     def mediums(self) -> int:
         if self.media != "Vinyl":
             return 1
-
-        conv = {"single": "1", "double": "2", "triple": "3"}
-        match = re.search(PATTERNS["vinyl_name"], self.disctitle)
-        try:
-            count = match.groupdict()["count"] if match else "1"
-            return int(conv.setdefault(count, "1"))
-        except (AttributeError, ValueError):
-            return 1
+        return self.get_vinyl_count(self.disctitle)
 
     @property
     def medium_total(self) -> int:

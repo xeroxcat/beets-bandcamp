@@ -6,6 +6,20 @@ pytestmark = pytest.mark.parsing
 
 
 @pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("2 x Vinyl LP - MTY003", 2),
+        ('3 x 12" Vinyl LP - MTY003', 3),
+        ("Double Vinyl LP - MTY003", 2),
+        ('12" Vinyl - MTY003', 1),
+        ('EP 12"Green Vinyl', 1),
+    ],
+)
+def test_mediums_count(name, expected):
+    assert Metaguru.get_vinyl_count(name) == expected
+
+
+@pytest.mark.parametrize(
     ("title", "expected"),
     [
         ("LI$INGLE010 - cyberflex - LEVEL X", "li-ingle010-cyberflex-level-x"),
