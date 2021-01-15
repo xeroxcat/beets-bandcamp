@@ -34,13 +34,12 @@ from beets.library import Item
 
 import beetsplug.fetchart as fetchart
 
-from ._metaguru import DATA_SOURCE, Metaguru, urlify
+from ._metaguru import DATA_SOURCE, Metaguru, urlify, DEFAULT_MEDIA
 
 JSONDict = Dict[str, Any]
 
 DEFAULT_CONFIG: JSONDict = {
-    "source_weight": 0.5,
-    "min_candidates": 7,
+    "search_max": 10,
     "lyrics": False,
     "art": False,
 }
@@ -158,14 +157,6 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                     fetchart.SOURCE_NAMES[BandcampAlbumArt] = DATA_SOURCE
                     break
 
-    def album_distance(self, items, album_info, _):
-        # type: (List[Any], AlbumInfo, Any) -> Distance
-        """Return the album distance."""
-        dist = Distance()
-        if self._from_bandcamp(album_info):
-            dist.add("source", self.config["source_weight"].as_number())
-        return dist
-
     def _cheat_mode(self, item: Item, name: str, _type: str) -> Iterator[str]:
         if "Visit" in item.comments:
             match = re.search(r"https:[/a-z.-]+com", item.comments)
@@ -174,7 +165,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                 self._info("Trying our guess {} before searching", url)
                 yield url
 
-    def candidates(self, items, artist, album, va_likely):
+    def candidates(self, items, artist, album, *args):
         # type: (List[Item], str, str, bool) -> Iterator[AlbumInfo]
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
@@ -205,7 +196,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID."""
-        return self.get_album_info(album_id)
+        return next(self.get_album_info(album_id))
 
     def track_for_id(self, track_id: str) -> Optional[TrackInfo]:
         """Fetch a track by its bandcamp ID."""
@@ -231,12 +222,12 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def _search(self, query: str, search_type: str = ALBUM_SEARCH) -> Iterator[str]:
         """Return an iterator for item URLs of type search_type matching the query."""
-        pattern = SEARCH_ITEM_PAT.format(search_type)
-        max_urls = self.config["min_candidates"].as_number()
-
+        max_urls = self.config["search_max"].as_number()
         urls: Set[str] = set()
+
         page = 1
         html = "page=1"
+        pattern = SEARCH_ITEM_PAT.format(search_type)
 
         def next_page_exists() -> bool:
             return bool(re.search(rf"page={page}", html))
@@ -254,7 +245,6 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                 url = match.groups()[0]
                 if url not in urls:
                     urls.add(url)
-                    self._info("Found URL: {}", url)
                     yield url
             else:
                 self._info("{} total URLs", str(len(urls)))

@@ -1,6 +1,6 @@
 import pytest
 
-from beetsplug._metaguru import Metaguru, urlify
+from beetsplug.bandcamp._metaguru import Metaguru, urlify
 
 pytestmark = pytest.mark.parsing
 

@@ -7,7 +7,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug._metaguru import ALBUM_STATUS, DATA_SOURCE
+from beetsplug.bandcamp._metaguru import ALBUM_STATUS, DATA_SOURCE
 
 JSONDict = Dict[str, Any]
 

@@ -7,9 +7,16 @@ from math import floor
 from string import ascii_lowercase, digits
 from typing import Any, Dict, Iterator, List, Optional, Pattern
 
+from beets import __version__ as beets_version
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from cached_property import cached_property
+from packaging.version import parse
 from pycountry import countries, subdivisions
+
+NEW_BEETS = True
+if parse(beets_version) < parse("1.5.0"):
+    NEW_BEETS = False
+
 
 JSONDict = Dict[str, Any]
 
@@ -203,7 +210,7 @@ class Metaguru:
     def tracks(self) -> List[JSONDict]:
         # TODO: Check for 'digital' in the name
         tracks = []
-        for raw_track in self.meta["track"]["itemListElement"]:
+        for raw_track in self.meta["track"].get("itemListElement", []):
             track = raw_track["item"]
             track.update(self.parse_track_name(track["name"]))
             if not track.get("artist"):
@@ -213,18 +220,23 @@ class Metaguru:
         return tracks
 
     def _trackinfo(self, track: JSONDict) -> TrackInfo:
-        return TrackInfo(
-            track.get("title"),
-            track.get("url", self.album_id),
-            artist=track.get("artist") or self.albumartist,
-            artist_id=self.artist_id,
-            data_source=DATA_SOURCE,
-            data_url=self.album_id,
-            index=track.get("position", 1),
-            length=floor(track.get("duration_secs", self.meta.get("duration_secs", 0))),
-            media=self.media or DEFAULT_MEDIA,
-            track_alt=track.get("track_alt", None),
+        if NEW_BEETS:
+            trackinfo = TrackInfo(
+                title=track.get("title"), track_id=track.get("url", self.album_id)
+            )
+        else:
+            trackinfo = TrackInfo(track.get("title"), track.get("url", self.album_id))
+        trackinfo.artist = track.get("artist") or self.albumartist
+        trackinfo.artist_id = self.artist_id
+        trackinfo.data_source = DATA_SOURCE
+        trackinfo.data_url = self.album_id
+        trackinfo.index = track.get("position", 1)
+        trackinfo.length = floor(
+            track.get("duration_secs", self.meta.get("duration_secs", 0))
         )
+        trackinfo.media = self.media or DEFAULT_MEDIA
+        trackinfo.track_alt = track.get("track_alt", None)
+        return trackinfo
 
     @property
     def singleton(self) -> TrackInfo:
@@ -241,26 +253,34 @@ class Metaguru:
             _track.medium_total = self.medium_total
             _tracks.append(_track)
 
-        return AlbumInfo(
-            self.album,
-            self.album_id,
-            self.albumartist,
-            self.artist_id,
-            tracks=_tracks,
-            va=self.is_va,
-            year=self.release_date.year,
-            month=self.release_date.month,
-            day=self.release_date.day,
-            label=self.label,
-            catalognum=self.catalognum,
-            albumtype=self.albumtype,
-            data_url=self.album_id,
-            albumstatus=ALBUM_STATUS,
-            country=self.country,
-            media=self.media,
-            mediums=self.mediums,
-            data_source=DATA_SOURCE,
-        )
+        if NEW_BEETS:
+            albuminfo = AlbumInfo(_tracks)
+            albuminfo.album = self.album
+            albuminfo.albumartist = self.albumartist
+            albuminfo.album_id = self.album_id
+            albuminfo.artist_id = self.artist_id
+        else:
+            albuminfo = AlbumInfo(
+                self.album,
+                self.album_id,
+                self.albumartist,
+                self.artist_id,
+                tracks=_tracks,
+            )
+        albuminfo.va = self.is_va
+        albuminfo.year = self.release_date.year
+        albuminfo.month = self.release_date.month
+        albuminfo.day = self.release_date.day
+        albuminfo.label = self.label
+        albuminfo.catalognum = self.catalognum
+        albuminfo.albumtype = self.albumtype
+        albuminfo.data_url = self.album_id
+        albuminfo.albumstatus = ALBUM_STATUS
+        albuminfo.country = self.country
+        albuminfo.media = self.media
+        albuminfo.mediums = self.mediums
+        albuminfo.data_source = DATA_SOURCE
+        return albuminfo
 
     @property
     def albums(self) -> Iterator[AlbumInfo]:

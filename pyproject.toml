@@ -1,15 +1,15 @@
 [tool.poetry]
-name = "beets-bandcamp"
-version = "0.2.0"
-description = "Plugin for beets (http://beets.io) to use bandcamp as an autotagger source."
-authors = ["Ariel George <unarbolito@gmail.com>", "Šarūnas Nejus <snejus@pm.me>"]
-readme = "README.rst"
+name = "beetcamp"
+version = "0.3.0"
+description = "Bandcamp autotagger source for beets (http://beets.io)."
+authors = ["Šarūnas Nejus <snejus@pm.me>", "Ariel George <unarbolito@gmail.com>"]
+readme = "README.md"
 license = "GPL-2.0"
 homepage = "https://github.com/snejus/beets-bandcamp"
 repository = "https://github.com/snejus/beets-bandcamp"
 
 packages = [{ include = "beetsplug" }]
-include = ["LICENSE", "README.rst"]
+include = ["LICENSE", "README.md"]
 
 [tool.poetry.dependencies]
 python = "^3.6"
