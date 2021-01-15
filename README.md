@@ -18,8 +18,11 @@ This is an up-to-date fork of [unrblt/beets-bandcamp](https://github.com/unrblt/
 Install this plug-in with
 
 ```bash
-   pip install beetcamp
+   pip install .
 ```
+
+from within this folder (it's not available on PyPI just yet)
+
 
 and add `bandcamp` to the `plugins` list in your beets config file.
 
