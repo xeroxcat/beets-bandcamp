@@ -1,4 +1,5 @@
-# Copyright (C) 2015 Ariel George
+# beetcamp, Copyright (C) 2021 Šarūnas Nejus. Licensed under the GPLv2 or later.
+# Based on beets-bandcamp: Copyright (C) 2015 Ariel George: Original implementation
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the

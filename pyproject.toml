@@ -2,7 +2,7 @@
 name = "beetcamp"
 version = "0.3.0"
 description = "Bandcamp autotagger source for beets (http://beets.io)."
-authors = ["Šarūnas Nejus <snejus@pm.me>", "Ariel George <unarbolito@gmail.com>"]
+authors = ["Šarūnas Nejus <snejus@pm.me>"]
 readme = "README.md"
 license = "GPL-2.0"
 homepage = "https://github.com/snejus/beets-bandcamp"
