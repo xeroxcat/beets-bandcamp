@@ -5,7 +5,7 @@ from datetime import date, datetime
 from functools import reduce
 from math import floor
 from string import ascii_lowercase, digits
-from typing import Any, Dict, Iterator, List, Optional, Pattern
+from typing import Any, Dict, List, Optional, Pattern
 
 from beets import __version__ as beets_version
 from beets.autotag.hooks import AlbumInfo, TrackInfo
@@ -99,11 +99,14 @@ class Helpers:
 
 class Metaguru(Helpers):
     html: str
+    preferred_media: str
     meta: JSONDict
+
     _media = None  # type: Dict[str, str]
 
-    def __init__(self, html: str) -> None:
+    def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
         self.html = html
+        self.preferred_media = media
 
         match = re.search(PATTERNS["meta"], html)
         if match:
@@ -114,7 +117,7 @@ class Metaguru(Helpers):
         return match.groups()[0] if match else ""
 
     @property
-    def album(self) -> str:
+    def album_name(self) -> str:
         # TODO: Cleanup catalogue, etc
         return self.meta["name"]
 
@@ -151,12 +154,14 @@ class Metaguru(Helpers):
 
     @property
     def disctitle(self) -> str:
-        return self._media.get("name", "") if self._media else ""
+        if self._media and self.media != "Digital Media":
+            return self._media.get("name", "")
+        return ""
 
     @property
     def catalognum(self) -> str:
         # TODO: Can also search the description for more info, e.g. catalog: catalognum
-        return self.parse_catalognum(self.album, self.disctitle)
+        return self.parse_catalognum(self.album_name, self.disctitle)
 
     @property
     def country(self) -> str:
@@ -225,7 +230,7 @@ class Metaguru(Helpers):
 
     @cached_property
     def is_va(self) -> bool:
-        if "Various Artists" in self.album or (
+        if "Various Artists" in self.album_name or (
             len(self.tracks) > 4 and not self.is_single_artist
         ):
             return True
@@ -273,7 +278,7 @@ class Metaguru(Helpers):
 
     @property
     def singleton(self) -> TrackInfo:
-        track = self.parse_track_name(self.album)
+        track = self.parse_track_name(self.album_name)
         data = {
             "artist": track.get("artist") or self.bandcamp_albumartist,
             "artist_id": self.artist_id,
@@ -310,7 +315,7 @@ class Metaguru(Helpers):
             return AlbumInfo(
                 [self._trackinfo(track) for track in self.tracks],
                 **{
-                    "album": self.album,
+                    "album": self.album_name,
                     "albumartist": self.albumartist,
                     "album_id": self.album_id,
                     "artist_id": self.artist_id,
@@ -319,7 +324,7 @@ class Metaguru(Helpers):
             )
         else:
             return AlbumInfo(
-                self.album,
+                self.album_name,
                 self.album_id,
                 self.albumartist,
                 self.artist_id,
@@ -328,13 +333,20 @@ class Metaguru(Helpers):
             )
 
     @property
-    def albums(self) -> Iterator[AlbumInfo]:
+    def album(self) -> AlbumInfo:
         """Return an album for each available release format."""
+        medias: JSONDict = {}
         try:
             for _format in self.meta["albumRelease"]:
-                media = _format.get("musicReleaseFormat")
-                if media:
-                    self._media = _format
-                    yield self.albuminfo
+                media = _format["musicReleaseFormat"]
+                medias[MEDIA_MAP[media]] = _format
         except AttributeError:
-            yield None
+            return None
+
+        for preference in self.preferred_media.split(","):
+            if preference in medias:
+                self._media = medias[preference]
+                return self.albuminfo
+        else:
+            self._media = medias[DEFAULT_MEDIA]
+            return self.albuminfo

@@ -117,31 +117,22 @@ def test_parse_single_track_release(single_track_release):
 
 def test_parse_album_or_comp(multitracks):
     html, expected_release = multitracks
-    guru = Metaguru(html)
+    guru = Metaguru(html, expected_release.media)
 
-    expected_disctitles = expected_release.disctitles.values()
-    albums = list(guru.albums)
-
-    assert len(albums) == len(expected_disctitles)
-
-    test_release = None
-    for album in albums:
-        disctitle = album.tracks[0].disctitle
-        assert disctitle in expected_disctitles
-        if album.media == expected_release.media:
-            test_release = album
-
+    actual_album = guru.album
+    disctitle = actual_album.tracks[0].disctitle
+    assert disctitle == expected_release.disctitle
     expected = expected_release.albuminfo
 
-    assert hasattr(test_release, "tracks")
-    assert len(test_release.tracks) == expected_release.track_count
+    assert hasattr(actual_album, "tracks")
+    assert len(actual_album.tracks) == expected_release.track_count
 
     expected.tracks.sort(key=lambda t: t.index)
-    test_release.tracks.sort(key=lambda t: t.index)
+    actual_album.tracks.sort(key=lambda t: t.index)
 
-    for test_release_track, expected_track in zip(test_release.tracks, expected.tracks):
-        assert vars(test_release_track) == vars(expected_track)
-    test_release.tracks = None
+    for actual_track, expected_track in zip(actual_album.tracks, expected.tracks):
+        assert vars(actual_track) == vars(expected_track)
+    actual_album.tracks = None
     expected.tracks = None
 
-    assert vars(test_release) == vars(expected)
+    assert vars(actual_album) == vars(expected)

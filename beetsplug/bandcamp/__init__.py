@@ -26,19 +26,19 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Set
 
 import beets
 import beets.ui
+import beetsplug.fetchart as fetchart
 import requests
 import six
 from beets import plugins
 from beets.autotag.hooks import AlbumInfo, Distance, TrackInfo
 from beets.library import Item
 
-import beetsplug.fetchart as fetchart
-
-from ._metaguru import DATA_SOURCE, Metaguru, urlify, DEFAULT_MEDIA
+from ._metaguru import DATA_SOURCE, DEFAULT_MEDIA, Metaguru, urlify
 
 JSONDict = Dict[str, Any]
 
 DEFAULT_CONFIG: JSONDict = {
+    "preferred_media": DEFAULT_MEDIA,
     "search_max": 10,
     "lyrics": False,
     "art": False,
@@ -107,6 +107,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
     def __init__(self) -> None:
         super().__init__()
         self.config.add(DEFAULT_CONFIG.copy())
+        self.media = self.config["preferred_media"].as_str()
         self.import_stages = [self.imported]
         self.register_listener("pluginload", self.loaded)
 
@@ -121,7 +122,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         if not item.lyrics:
             html = self._get(item.mb_trackid)
             if html:
-                lyrics = Metaguru(html).lyrics
+                lyrics = Metaguru(html, self.media).lyrics
                 if lyrics:
                     self._info("Fetched lyrics: {}", item)
                     item.lyrics = lyrics
@@ -170,16 +171,11 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
         """
-        urls: Iterator
-
+        initial: Iterator[str] = iter([])
         if items:
-            urls = chain(
-                self._cheat_mode(items[0], album, "album"),
-                self._search(album, ALBUM_SEARCH),
-            )
-        else:
-            urls = self._search(album, ALBUM_SEARCH)
-        return filter(truth, chain.from_iterable(map(self.get_album_info, urls)))
+            initial = self._cheat_mode(items[0], album, ALBUM_SEARCH)
+        urls = chain(initial, self._search(album, ALBUM_SEARCH))
+        return filter(truth, map(self.get_album_info, urls))
 
     def item_candidates(self, item, artist, title):
         # type: (Item, str, str) -> Iterator[TrackInfo]
@@ -196,13 +192,13 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID."""
-        return next(self.get_album_info(album_id))
+        return self.get_album_info(album_id)
 
     def track_for_id(self, track_id: str) -> Optional[TrackInfo]:
         """Fetch a track by its bandcamp ID."""
         return self.get_track_info(track_id)
 
-    def get_album_info(self, url: str) -> Iterator[Optional[AlbumInfo]]:
+    def get_album_info(self, url: str) -> Optional[AlbumInfo]:
         """Return an AlbumInfo object for a bandcamp album page.
         If track url is given by mistake, find and fetch the album url instead.
         """
@@ -211,14 +207,13 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             match = re.search(ALBUM_URL_IN_TRACK, html)
             if match:
                 html = self._get(match.groups()[0])
-        if html:
-            return Metaguru(html).albums
-        return iter([None])
+
+        return Metaguru(html, self.media).album if html else None
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
         html = self._get(url)
-        return Metaguru(html).singleton if html else None
+        return Metaguru(html, self.media).singleton if html else None
 
     def _search(self, query: str, search_type: str = ALBUM_SEARCH) -> Iterator[str]:
         """Return an iterator for item URLs of type search_type matching the query."""

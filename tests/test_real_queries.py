@@ -68,10 +68,10 @@ def test_track_url_while_searching_album(single_track_album_search):
     track_url, expected_release = single_track_album_search
     plugin = BandcampPlugin()
 
-    albums = plugin.get_album_info(track_url)
+    album = plugin.get_album_info(track_url)
 
-    assert albums
-    check_album(next(albums), expected_release.albuminfo)
+    assert album
+    check_album(album, expected_release.albuminfo)
 
 
 def test_candidates(ep_album):

@@ -19,7 +19,7 @@ class ReleaseInfo:
     artist_id: str
     track_count: int
     media: str
-    disctitles: Dict[str, str]
+    disctitle: str
     singleton = None  # type: TrackInfo
     albuminfo = None  # type: AlbumInfo
 
@@ -45,7 +45,7 @@ class ReleaseInfo:
             medium=1,
             medium_index=index,
             medium_total=self.track_count,
-            disctitle=self.disctitles.get(self.media),
+            disctitle=self.disctitle
         )
 
     def set_singleton(self, artist: str, title: str, length: int) -> None:
@@ -95,7 +95,7 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
         album_id="https://mega-tech.bandcamp.com/track/matriark-arangel",
         track_count=1,
         media="Digital Media",
-        disctitles={},
+        disctitle="",
     )
     info.set_singleton(artist="Matriark", title="Arangel", length=421)
     return codecs.open(test_html_file).read(), info
@@ -112,7 +112,7 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         album_id="https://sinensis-ute.bandcamp.com/album/sine03",
         track_count=2,
         media="CD",
-        disctitles={"CD": "CD", "Digital Media": ""},
+        disctitle="CD",
     )
     tracks = [
         ("live-at-parken", album_artist, "Live At PARKEN", 3600),
@@ -143,7 +143,7 @@ def album() -> Tuple[str, ReleaseInfo]:
         album_id="https://ute-rec.bandcamp.com/album/ute004",
         track_count=4,
         media="Vinyl",
-        disctitles={"Vinyl": '12" Vinyl', "Digital Media": "UTE004"},
+        disctitle='12" Vinyl',
     )
     tracks = [
         (
@@ -181,10 +181,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         album_id=f"{artist_id}/album/fld001-gareth-wild-common-assault-ep",
         track_count=6,
         media="Vinyl",
-        disctitles={
-            "Vinyl": "FLD001 - Common Assault EP",
-            "Digital Media": "FLD001 // Gareth Wild - Common Assault EP",
-        },
+        disctitle="FLD001 - Common Assault EP",
     )
     tracks = [
         (
@@ -254,7 +251,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
         album_id="https://ismusberlin.bandcamp.com/album/ismva0033",
         track_count=13,
         media="Digital Media",
-        disctitles={"Digital Media": "ISMVA003.3"},
+        disctitle="",
     )
     tracks = [
         (
@@ -294,7 +291,7 @@ def ep() -> Tuple[str, ReleaseInfo]:
         album_id="https://fallingapart.bandcamp.com/album/fa010-kickdown-vienna",
         track_count=4,
         media="Vinyl",
-        disctitles={"Vinyl": '12" Vinyl', "Digital Media": "fa010 | Kickdown Vienna"},
+        disctitle='12" Vinyl',
     )
     tracks = [
         (
