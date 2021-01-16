@@ -7,15 +7,13 @@ This is an up-to-date fork of [unrblt/beets-bandcamp](https://github.com/unrblt/
 
 # Installation
 
-Install this plug-in with
+Navigate to your `beets` virtual environment, install the plug-in with
 
 ```bash
-   pip install .
+   pip install --user beetcamp
 ```
 
-from within this folder (it's not available on PyPI just yet)
-
-and add `bandcamp` to the `plugins` list in your beets config file.
+and add `bandcamp` to the `plugins` list to your beets configuration file.
 
 
 # Configuration
