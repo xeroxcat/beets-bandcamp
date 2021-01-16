@@ -159,24 +159,26 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                     fetchart.SOURCE_NAMES[BandcampAlbumArt] = DATA_SOURCE
                     break
 
-    def _cheat_mode(self, item: Item, name: str, _type: str) -> Iterator[str]:
+    def _cheat_mode(self, item: Item, name: str, _type: str) -> Optional[str]:
         if "Visit" in item.comments:
             match = re.search(r"https:[/a-z.-]+com", item.comments)
             if match:
                 url = match.group() + "/" + _type + "/" + urlify(name)
                 self._info("Trying our guess {} before searching", url)
-                yield url
+                return url
+        return None
 
     def candidates(self, items, artist, album, *args):
         # type: (List[Item], str, str, bool) -> Iterator[AlbumInfo]
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
         """
-        initial: Iterator[str] = iter([])
         if items:
-            initial = self._cheat_mode(items[0], album, ALBUM_SEARCH)
-        urls = chain(initial, self._search(album, ALBUM_SEARCH))
-        return filter(truth, map(self.get_album_info, urls))
+            initial_url = self._cheat_mode(items[0], album, ALBUM_SEARCH)
+            initial_guess = self.get_album_info(initial_url) if initial_url else None
+            if initial_guess:
+                return iter([initial_guess])
+        return filter(truth, map(self.get_album_info, self._search(album, ALBUM_SEARCH)))
 
     def item_candidates(self, item, artist, title):
         # type: (Item, str, str) -> Iterator[TrackInfo]
@@ -185,11 +187,12 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         a comment saying 'Visit <label-url>' - we look at this first by converting
         title into the format that Bandcamp use.
         """
-        urls = chain(
-            self._cheat_mode(item, title, "track"),
-            self._search(title or item.album or artist, TRACK_SEARCH),
-        )
-        return filter(truth, map(self.get_track_info, urls))
+        initial_url = self._cheat_mode(item, title, TRACK_SEARCH)
+        initial_guess = self.get_track_info(initial_url) if initial_url else None
+        if initial_guess:
+            return iter([initial_guess])
+        query = title or item.album or artist
+        return filter(truth, map(self.get_track_info, self._search(query, TRACK_SEARCH)))
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID."""

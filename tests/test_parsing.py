@@ -62,6 +62,10 @@ def test_convert_title(title, expected):
             "LI$INGLE010 - cyberflex - LEVEL X",
             {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
         ),
+        (
+            "Fifty-Third ft. SYH",
+            {"track_alt": None, "artist": None, "title": "Fifty-Third ft. SYH"},
+        ),
     ],
 )
 def test_parse_track_name(name, expected):

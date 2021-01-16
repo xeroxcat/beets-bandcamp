@@ -46,8 +46,8 @@ PATTERNS: Dict[str, Pattern] = {
     "track_name": re.compile(
         r"""
 ((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w]*)?
-(\s?(?P<artist>[^-]*[^ ])\s?-\s?)?
-(?P<title>[^-]*$)""",
+(\s?(?P<artist>[^-]*[^ ])[^a-z]-\s?)?
+(?P<title>([\w]*-[\w])*[^-]*$)""",
         re.VERBOSE,
     ),
     "vinyl_name": re.compile(
