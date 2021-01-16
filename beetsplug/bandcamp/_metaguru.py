@@ -34,11 +34,11 @@ MEDIA_MAP = {
 }
 VALID_URL_CHARS = {*ascii_lowercase, *digits}
 
-_catalognum = r"[^\d\W]+[_\W]?\d+(?:\W\d|CD)?"
-PATTERNS = {
+_catalognum = r"([^\d\W]+[_\W]?\d+(?:\W\d|CD)?)"
+PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
-    "quick_catalognum": re.compile(rf"\[({_catalognum})\]"),
-    "catalognum": re.compile(rf"(^{_catalognum})"),
+    "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
+    "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
@@ -69,7 +69,35 @@ def urlify(pretty_string: str) -> str:
     ).strip("-")
 
 
-class Metaguru:
+class Helpers:
+    @staticmethod
+    def get_vinyl_count(name: str) -> int:
+        conv = {"single": 1, "double": 2, "triple": 3}
+        match = re.search(PATTERNS["vinyl_name"], name)
+        if not match:
+            return 1
+        count: str = match.groupdict()["count"]
+        return int(count) if count.isdigit() else conv[count.lower()]
+
+    @staticmethod
+    def parse_track_name(name: str) -> JSONDict:
+        return re.search(PATTERNS["track_name"], name).groupdict()  # type: ignore
+
+    @staticmethod
+    def parse_catalognum(album: str, disctitle: str) -> str:
+        for pattern, string in [
+            (PATTERNS["quick_catalognum"], album),
+            (PATTERNS["catalognum"], disctitle),
+            (PATTERNS["catalognum"], album),
+        ]:
+            match = re.search(pattern, string)
+            if match:
+                return [group for group in match.groups() if group].pop()
+
+        return ""
+
+
+class Metaguru(Helpers):
     html: str
     meta: JSONDict
     _media = None  # type: Dict[str, str]
@@ -81,20 +109,14 @@ class Metaguru:
         if match:
             self.meta = json.loads(match.group())
 
-    def _search(self, needle: Pattern[str], haystack: str = None) -> str:
-        if not haystack:
-            haystack = self.html
-        match = re.search(needle, haystack)
+    def _search(self, pattern: Pattern[str]) -> str:
+        match = re.search(pattern, self.html)
         return match.groups()[0] if match else ""
 
     @property
     def album(self) -> str:
         # TODO: Cleanup catalogue, etc
         return self.meta["name"]
-
-    @property
-    def albumartist(self) -> str:
-        return self.meta["byArtist"]["name"]
 
     @property
     def album_id(self) -> str:
@@ -106,6 +128,7 @@ class Metaguru:
 
     @property
     def image(self) -> str:
+        # TODO: Need to test
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
 
@@ -127,11 +150,13 @@ class Metaguru:
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
     @property
+    def disctitle(self) -> str:
+        return self._media.get("name", "") if self._media else ""
+
+    @property
     def catalognum(self) -> str:
         # TODO: Can also search the description for more info, e.g. catalog: catalognum
-        return self._search(PATTERNS["quick_catalognum"], self.album) or self._search(
-            PATTERNS["catalognum"], self.album
-        )
+        return self.parse_catalognum(self.album, self.disctitle)
 
     @property
     def country(self) -> str:
@@ -151,22 +176,6 @@ class Metaguru:
             return MEDIA_MAP[self._media["musicReleaseFormat"]]
         return DEFAULT_MEDIA
 
-    @property
-    def disctitle(self) -> str:
-        return self._media["name"]
-
-    @staticmethod
-    def get_vinyl_count(name: str) -> int:
-        conv = {"single": "1", "double": "2", "triple": "3"}
-        match = re.search(PATTERNS["vinyl_name"], name)
-        try:
-            count = match.groupdict()["count"]  # type: ignore
-            if count.isdigit():
-                return int(count)
-            return int(conv.get(count.lower()))  # type: ignore
-        except AttributeError:
-            return 1
-
     @cached_property
     def mediums(self) -> int:
         if self.media != "Vinyl":
@@ -177,27 +186,62 @@ class Metaguru:
     def medium_total(self) -> int:
         """We can't tell the number of tracks in a disc for a multi-disc release."""
         # TODO: Check description
-        return len(self.tracks) if self.mediums == 1 else 0
+        return len(self.tracks)
 
     @property
     def medium(self) -> int:
         """We can't tell the number of current disc for a multi-disc release."""
-        return 1 if self.mediums == 1 else 0
+        return 1
+
+    @cached_property
+    def tracks(self) -> List[JSONDict]:
+        """`raw_track` example
+        "@type": "ListItem",
+        "position": 1,
+        "item": {
+            "@id": "https://.../bandcamp.com/track/...",
+            "url": "https://.../bandcamp.com/track/...",
+            "@type": ["MusicRecording"],
+            "name": "A1 - SMFORMA - Giliau nei garsas",
+            "duration": "P00H04M43S"
+            "duration_secs": 283,
+        },
+        """
+        # TODO: Check for 'digital' in the name to determine digital-only tracks
+        tracks = []
+        for raw_track in self.meta["track"].get("itemListElement", []):
+            track = raw_track["item"]
+            track["position"] = raw_track["position"]
+            track.update(self.parse_track_name(track["name"]))
+            tracks.append(track)
+        return tracks
+
+    @cached_property
+    def is_single_artist(self) -> bool:
+        unique_artists = {track["artist"] for track in self.tracks}
+        if "ep" in self.disctitle.lower() or len(unique_artists) == 1:
+            return True
+        return False
 
     @cached_property
     def is_va(self) -> bool:
-        if "Various Artists" in self.album:
-            return True
-
-        unique_artists = len({track["artist"] for track in self.tracks})
-        if (
-            len(self.tracks) > 4
-            and "ep" not in self.disctitle.lower()
-            and unique_artists > 1
+        if "Various Artists" in self.album or (
+            len(self.tracks) > 4 and not self.is_single_artist
         ):
             return True
-
         return False
+
+    @property
+    def bandcamp_albumartist(self) -> str:
+        return self.meta["byArtist"]["name"]
+
+    @property
+    def albumartist(self) -> str:
+        if self.is_va:
+            return "Various Artists"
+        if self.is_single_artist and self.tracks[0]["artist"]:
+            return self.tracks[0]["artist"]
+        return self.bandcamp_albumartist
 
     @property
     def albumtype(self) -> str:
@@ -207,85 +251,81 @@ class Metaguru:
             return "ep"
         return "album"
 
-    @staticmethod
-    def parse_track_name(name: str) -> Dict[str, str]:
-        return re.search(PATTERNS["track_name"], name).groupdict()  # type: ignore
-
-    @cached_property
-    def tracks(self) -> List[JSONDict]:
-        # TODO: Check for 'digital' in the name
-        tracks = []
-        for raw_track in self.meta["track"].get("itemListElement", []):
-            track = raw_track["item"]
-            track.update(self.parse_track_name(track["name"]))
-            if not track.get("artist"):
-                track["artist"] = self.albumartist
-            track["position"] = raw_track["position"]
-            tracks.append(track)
-        return tracks
-
     def _trackinfo(self, track: JSONDict) -> TrackInfo:
+        data = {
+            "artist": track.get("artist") or self.albumartist,
+            "artist_id": self.artist_id,
+            "data_source": DATA_SOURCE,
+            "data_url": self.album_id,
+            "index": track.get("position"),
+            "length": floor(track.get("duration_secs", 0)),
+            "media": self.media or DEFAULT_MEDIA,
+            "track_alt": track.get("track_alt"),
+            "disctitle": self.disctitle,
+            "medium": self.medium,
+            "medium_index": track.get("position"),
+            "medium_total": self.medium_total,
+        }
         if NEW_BEETS:
-            trackinfo = TrackInfo(
-                title=track.get("title"), track_id=track.get("url", self.album_id)
-            )
+            return TrackInfo(title=track.get("title"), track_id=track.get("url"), **data)
         else:
-            trackinfo = TrackInfo(track.get("title"), track.get("url", self.album_id))
-        trackinfo.artist = track.get("artist") or self.albumartist
-        trackinfo.artist_id = self.artist_id
-        trackinfo.data_source = DATA_SOURCE
-        trackinfo.data_url = self.album_id
-        trackinfo.index = track.get("position", 1)
-        trackinfo.length = floor(
-            track.get("duration_secs", self.meta.get("duration_secs", 0))
-        )
-        trackinfo.media = self.media or DEFAULT_MEDIA
-        trackinfo.track_alt = track.get("track_alt", None)
-        return trackinfo
+            return TrackInfo(track.get("title"), track.get("url"), **data)
 
     @property
     def singleton(self) -> TrackInfo:
-        return self._trackinfo(self.parse_track_name(self.album))
+        track = self.parse_track_name(self.album)
+        data = {
+            "artist": track.get("artist") or self.bandcamp_albumartist,
+            "artist_id": self.artist_id,
+            "data_source": DATA_SOURCE,
+            "data_url": self.album_id,
+            "index": 1,
+            "length": floor(self.meta.get("duration_secs", 0)),
+            "media": self.media or DEFAULT_MEDIA,
+            "track_alt": track.get("track_alt"),
+        }
+        if NEW_BEETS:
+            return TrackInfo(title=track.get("title"), track_id=self.album_id, **data)
+        else:
+            return TrackInfo(track.get("title"), self.album_id, **data)
 
     @property
     def albuminfo(self) -> AlbumInfo:
-        _tracks = []
-        for track in self.tracks:
-            _track = self._trackinfo(track)
-            _track.disctitle = self.disctitle
-            _track.medium = self.medium
-            _track.medium_index = _track.index
-            _track.medium_total = self.medium_total
-            _tracks.append(_track)
-
+        data = {
+            "va": self.is_va,
+            "year": self.release_date.year,
+            "month": self.release_date.month,
+            "day": self.release_date.day,
+            "label": self.label,
+            "catalognum": self.catalognum,
+            "albumtype": self.albumtype,
+            "data_url": self.album_id,
+            "albumstatus": ALBUM_STATUS,
+            "country": self.country,
+            "media": self.media,
+            "mediums": self.mediums,
+            "data_source": DATA_SOURCE,
+        }
         if NEW_BEETS:
-            albuminfo = AlbumInfo(_tracks)
-            albuminfo.album = self.album
-            albuminfo.albumartist = self.albumartist
-            albuminfo.album_id = self.album_id
-            albuminfo.artist_id = self.artist_id
+            return AlbumInfo(
+                [self._trackinfo(track) for track in self.tracks],
+                **{
+                    "album": self.album,
+                    "albumartist": self.albumartist,
+                    "album_id": self.album_id,
+                    "artist_id": self.artist_id,
+                },
+                **data,
+            )
         else:
-            albuminfo = AlbumInfo(
+            return AlbumInfo(
                 self.album,
                 self.album_id,
                 self.albumartist,
                 self.artist_id,
-                tracks=_tracks,
+                tracks=[self._trackinfo(track) for track in self.tracks],
+                **data,
             )
-        albuminfo.va = self.is_va
-        albuminfo.year = self.release_date.year
-        albuminfo.month = self.release_date.month
-        albuminfo.day = self.release_date.day
-        albuminfo.label = self.label
-        albuminfo.catalognum = self.catalognum
-        albuminfo.albumtype = self.albumtype
-        albuminfo.data_url = self.album_id
-        albuminfo.albumstatus = ALBUM_STATUS
-        albuminfo.country = self.country
-        albuminfo.media = self.media
-        albuminfo.mediums = self.mediums
-        albuminfo.data_source = DATA_SOURCE
-        return albuminfo
 
     @property
     def albums(self) -> Iterator[AlbumInfo]:

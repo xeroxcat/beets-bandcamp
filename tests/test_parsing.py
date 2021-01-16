@@ -100,12 +100,12 @@ def test_parse_country(name, expected):
         ("UTC003-CD", "UTC003"),
         ("UTC-003", "UTC-003"),
         ("EP [SINDEX008]", "SINDEX008"),
+        ("2 x Vinyl LP - MTY003", "MTY003"),
+        ("00M", ""),
     ],
 )
 def test_parse_catalognum(album, expected):
-    guru = Metaguru("")
-    guru.meta = {"name": album}
-    assert guru.catalognum == expected
+    assert Metaguru.parse_catalognum(album, "") == expected
 
 
 def test_parse_single_track_release(single_track_release):

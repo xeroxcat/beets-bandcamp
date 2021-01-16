@@ -273,7 +273,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
     info.set_albuminfo(
         tracks,
         album="ISMVA003.3",
-        albumartist="Ismus",
+        albumartist="Various Artists",
         albumtype="compilation",
         catalognum="ISMVA003.3",
         label="Ismus",
