@@ -105,7 +105,12 @@ def test_parse_country(name, expected):
         ("UTC-003", "UTC-003"),
         ("EP [SINDEX008]", "SINDEX008"),
         ("2 x Vinyl LP - MTY003", "MTY003"),
+        ("Kulør 001", "Kulør 001"),
         ("00M", ""),
+        ("X-Coast - Dance Trax Vol.30", ""),
+        ("Christmas 2020", ""),
+        ("RR4", "RR4"),
+        ("Various Artists 001", ""),
     ],
 )
 def test_parse_catalognum(album, expected):

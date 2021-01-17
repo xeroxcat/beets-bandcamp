@@ -39,6 +39,7 @@ PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
+    "catalognum_exclude": re.compile(r"vol(ume)?|artists?|2020|2021", flags=re.IGNORECASE),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
@@ -90,7 +91,7 @@ class Helpers:
             (PATTERNS["catalognum"], disctitle),
             (PATTERNS["catalognum"], album),
         ]:
-            match = re.search(pattern, string)
+            match = re.search(pattern, re.sub(PATTERNS["catalognum_exclude"], "", string))
             if match:
                 return [group for group in match.groups() if group].pop()
 
