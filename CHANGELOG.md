@@ -1,3 +1,14 @@
+# [0.4.3] 2021-01-17
+
+### Fixed
+- Handled a `KeyError` that would come up when looking for an album/track where
+  the block describing available media isn't found. Thanks @noahsager.
+
+### Changed
+- Info logs are now `DEBUG` logs so that they're not printed without the verbose
+  mode, thanks @arogl.
+
+
 # [0.4.2] 2021-01-17
 
 ### Fixed

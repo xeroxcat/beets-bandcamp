@@ -39,7 +39,9 @@ PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
-    "catalognum_exclude": re.compile(r"vol(ume)?|artists?|2020|2021", flags=re.IGNORECASE),
+    "catalognum_exclude": re.compile(
+        r"vol(ume)?|artists?|2020|2021", flags=re.IGNORECASE
+    ),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
@@ -341,7 +343,7 @@ class Metaguru(Helpers):
             for _format in self.meta["albumRelease"]:
                 media = _format["musicReleaseFormat"]
                 medias[MEDIA_MAP[media]] = _format
-        except AttributeError:
+        except (KeyError, AttributeError):
             return None
 
         for preference in self.preferred_media.split(","):

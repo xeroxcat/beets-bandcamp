@@ -15,8 +15,6 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 """Adds bandcamp album search support to the autotagger."""
-# TODO: Add changelog
-
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
@@ -63,7 +61,7 @@ class BandcampRequestsHandler:
         self._log.log(logging.WARNING, msg_template, *args, exc_info=True)
 
     def _info(self, msg_template: str, *args: Sequence[str]) -> None:
-        self._log.log(logging.INFO, msg_template, *args, exc_info=False)
+        self._log.log(logging.DEBUG, msg_template, *args, exc_info=False)
 
     def _get(self, url: str) -> str:
         """Return text contents of the url response."""
