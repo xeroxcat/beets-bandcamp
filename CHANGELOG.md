@@ -1,3 +1,11 @@
+# [0.4.4] 2021-01-17
+
+### Fixed
+- `release_date` search pattern now looks for a specific date format, guarding
+  it against similar matches that could be found in the description, thanks
+  @noahsager.
+
+
 # [0.4.3] 2021-01-17
 
 ### Fixed

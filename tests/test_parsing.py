@@ -32,6 +32,17 @@ def test_convert_title(title, expected):
 
 
 @pytest.mark.parametrize(
+    ("string", "expected"),
+    [
+        ("released 06 November 2019", "06 November 2019"),
+        ("released on Some Records", ""),
+    ],
+)
+def test_parse_release_date(string, expected):
+    assert Metaguru.parse_release_date(string) == expected
+
+
+@pytest.mark.parametrize(
     ("name", "expected"),
     [
         (

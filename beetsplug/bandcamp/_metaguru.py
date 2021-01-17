@@ -45,7 +45,7 @@ PATTERNS: Dict[str, Pattern] = {
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
-    "release_date": re.compile(r" released (.*)"),
+    "release_date": re.compile(r"released ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
 ((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w]*)?
@@ -98,6 +98,11 @@ class Helpers:
                 return [group for group in match.groups() if group].pop()
 
         return ""
+
+    @staticmethod
+    def parse_release_date(string: str) -> str:
+        match = re.search(PATTERNS["release_date"], string)
+        return match.groups()[0] if match else ""
 
 
 class Metaguru(Helpers):
@@ -152,7 +157,7 @@ class Metaguru(Helpers):
 
     @property
     def release_date(self) -> date:
-        datestr = self._search(PATTERNS["release_date"])
+        datestr = self.parse_release_date(self.html)
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
     @property
