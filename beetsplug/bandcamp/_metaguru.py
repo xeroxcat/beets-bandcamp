@@ -361,7 +361,10 @@ class Metaguru(Helpers):
         medias: JSONDict = {}
         try:
             for _format in self.meta["albumRelease"]:
-                media = _format["musicReleaseFormat"]
+                try:
+                    media = _format["musicReleaseFormat"]
+                except KeyError:
+                    continue
                 medias[MEDIA_MAP[media]] = _format
         except (KeyError, AttributeError):
             return None

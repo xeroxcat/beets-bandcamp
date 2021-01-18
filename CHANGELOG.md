@@ -1,3 +1,11 @@
+# [0.5.2] 2021-01-18
+
+### Fixed
+- On Bandcamp merch is listed in the same list together with media - this is now
+  taken into account and merch is ignored. Previously, some albums would fail to
+  be returned because of this.
+
+
 # [0.5.1] 2021-01-18
 
 ### Fixed

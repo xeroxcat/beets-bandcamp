@@ -98,4 +98,5 @@ release is found when importing you can select `enter Id` and paste the Bandcamp
 
 * \* are likely to be inaccurate, since Bandcamp does not provide this data,
   therefore they depend on artists providing some clues in the descriptions of
-  their releases.
+  their releases. This is only relevant if you have `per_disc_numbering` set to
+  `True` in the global beets configuration.
