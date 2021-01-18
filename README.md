@@ -28,6 +28,16 @@ fetching albums. For example: `preferred_media: Vinyl,Cassette`
 will ignore `CD`, check for a `Vinyl`, and then for a `Cassette`, in the end
 defaulting to `Digital` (always available) if none of the two are found.
 
+#### `include_digital_only_tracks`
+
+- Default: `True`
+
+For media that isn't `Digital Media`, include all tracks, even if their titles
+contain **digital only** (or alike).
+
+If you have `False` here, then, for example, a `Vinyl` media of an album will
+only include the tracks that are supposed to be found in that media.
+
 ##### `search_max`
 
 - Default: `10`.

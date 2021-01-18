@@ -38,6 +38,7 @@ JSONDict = Dict[str, Any]
 
 DEFAULT_CONFIG: JSONDict = {
     "preferred_media": DEFAULT_MEDIA,
+    "include_digital_only_tracks": True,
     "search_max": 10,
     "lyrics": False,
     "art": False,
@@ -210,7 +211,8 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             if match:
                 html = self._get(match.groups()[0])
 
-        return Metaguru(html, self.media).album if html else None
+        include_all = self.config["include_digital_only_tracks"]
+        return Metaguru(html, self.media).album(include_all) if html else None
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""

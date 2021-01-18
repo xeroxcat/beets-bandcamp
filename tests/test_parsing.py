@@ -13,6 +13,7 @@ pytestmark = pytest.mark.parsing
         ("Double Vinyl LP - MTY003", 2),
         ('12" Vinyl - MTY003', 1),
         ('EP 12"Green Vinyl', 1),
+        ("2LP Vinyl", 2),
     ],
 )
 def test_mediums_count(name, expected):
@@ -47,35 +48,97 @@ def test_parse_release_date(string, expected):
     [
         (
             "Title",
-            {"track_alt": None, "artist": None, "title": "Title"},
+            {"track_alt": None, "artist": None, "title": "Title", "digital_only": False},
         ),
         (
             "Artist - Title",
-            {"track_alt": None, "artist": "Artist", "title": "Title"},
+            {
+                "track_alt": None,
+                "artist": "Artist",
+                "title": "Title",
+                "digital_only": False,
+            },
         ),
         (
             "A1. Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+            {
+                "track_alt": "A1",
+                "artist": "Artist",
+                "title": "Title",
+                "digital_only": False,
+            },
         ),
         (
             "A1- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+            {
+                "track_alt": "A1",
+                "artist": "Artist",
+                "title": "Title",
+                "digital_only": False,
+            },
         ),
         (
             "A1.- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
+            {
+                "track_alt": "A1",
+                "artist": "Artist",
+                "title": "Title",
+                "digital_only": False,
+            },
         ),
         (
             "DJ BEVERLY HILL$ - Raw Steeze",
-            {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
+            {
+                "track_alt": None,
+                "artist": "DJ BEVERLY HILL$",
+                "title": "Raw Steeze",
+                "digital_only": False,
+            },
         ),
         (
             "LI$INGLE010 - cyberflex - LEVEL X",
-            {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
+            {
+                "track_alt": None,
+                "artist": "cyberflex",
+                "title": "LEVEL X",
+                "digital_only": False,
+            },
         ),
         (
             "Fifty-Third ft. SYH",
-            {"track_alt": None, "artist": None, "title": "Fifty-Third ft. SYH"},
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "Fifty-Third ft. SYH",
+                "digital_only": False,
+            },
+        ),
+        (
+            "Artist - Track [Digital Bonus]",
+            {
+                "track_alt": None,
+                "artist": "Artist",
+                "title": "Track",
+                "digital_only": True,
+            },
+        ),
+        (
+            "DIGI 11. Track",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "Track",
+                "digital_only": True,
+            },
+        ),
+        (
+            "Digital Life",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "Digital Life",
+                "digital_only": False,
+            },
         ),
     ],
 )
@@ -138,8 +201,9 @@ def test_parse_single_track_release(single_track_release):
 def test_parse_album_or_comp(multitracks):
     html, expected_release = multitracks
     guru = Metaguru(html, expected_release.media)
+    include_all = False
 
-    actual_album = guru.album
+    actual_album = guru.album(include_all)
     disctitle = actual_album.tracks[0].disctitle
     assert disctitle == expected_release.disctitle
     expected = expected_release.albuminfo

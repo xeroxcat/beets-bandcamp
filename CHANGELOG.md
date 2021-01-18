@@ -1,3 +1,18 @@
+# [0.5.0] 2021-01-18
+
+### Added
+- Added some functionality to exclude digital-only tracks for media that aren't
+  _Digital Media_. A new configuration option `include_digital_only_tracks`, if
+  set to `True` will include all tracks regardless of the media, and if set to
+  `False`, will mind, for example, a _Vinyl_ media and exclude tracks that
+  have some sort of _digital only_ flag in their names, like `DIGI`, `[Digital
+  Bonus]`, `[Digital Only]` and alike. These flags are also cleared from the
+  track names.
+
+### Fixed
+- For LP Vinyls, the disc count and album type are now corrected.
+
+
 # [0.4.4] 2021-01-17
 
 ### Fixed

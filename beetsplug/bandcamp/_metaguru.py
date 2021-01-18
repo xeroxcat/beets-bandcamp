@@ -43,6 +43,9 @@ PATTERNS: Dict[str, Pattern] = {
         r"vol(ume)?|artists?|2020|2021", flags=re.IGNORECASE
     ),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
+    "digital": re.compile(
+        r"(^DIGI ([\d]+\.\s?)?)|(?i:\s?[\[(]digi(tal)? (bonus|only)[\])])"
+    ),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
     "release_date": re.compile(r"released ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
@@ -54,7 +57,7 @@ PATTERNS: Dict[str, Pattern] = {
         re.VERBOSE,
     ),
     "vinyl_name": re.compile(
-        r'(?P<count>[1-5]|[Ss]ingle|[Dd]ouble|[Tt]riple) ?x? ?((7|10|12)" )?Vinyl'
+        r'(?P<count>[1-5]|[Ss]ingle|[Dd]ouble|[Tt]riple)(LP)? ?x? ?((7|10|12)" )?Vinyl'
     ),
 }
 
@@ -84,7 +87,15 @@ class Helpers:
 
     @staticmethod
     def parse_track_name(name: str) -> JSONDict:
-        return re.search(PATTERNS["track_name"], name).groupdict()  # type: ignore
+        track = re.search(PATTERNS["track_name"], name).groupdict()  # type: ignore
+        title = track["title"]
+        excl_digi_only_title = re.sub(PATTERNS["digital"], "", title)
+        if excl_digi_only_title != title:
+            track["digital_only"] = True
+            track["title"] = excl_digi_only_title
+        else:
+            track["digital_only"] = False
+        return track
 
     @staticmethod
     def parse_catalognum(album: str, disctitle: str) -> str:
@@ -196,12 +207,6 @@ class Metaguru(Helpers):
         return self.get_vinyl_count(self.disctitle)
 
     @property
-    def medium_total(self) -> int:
-        """We can't tell the number of tracks in a disc for a multi-disc release."""
-        # TODO: Check description
-        return len(self.tracks)
-
-    @property
     def medium(self) -> int:
         """We can't tell the number of current disc for a multi-disc release."""
         return 1
@@ -220,7 +225,6 @@ class Metaguru(Helpers):
             "duration_secs": 283,
         },
         """
-        # TODO: Check for 'digital' in the name to determine digital-only tracks
         tracks = []
         for raw_track in self.meta["track"].get("itemListElement", []):
             track = raw_track["item"]
@@ -231,8 +235,12 @@ class Metaguru(Helpers):
 
     @cached_property
     def is_single_artist(self) -> bool:
-        unique_artists = {track["artist"] for track in self.tracks}
-        if "ep" in self.disctitle.lower() or len(unique_artists) == 1:
+        unique_artists = {
+            re.sub(r" ft\. .*", "", t["artist"]) if t["artist"] else None
+            for t in self.tracks
+        }
+        unique_artists.discard(None)
+        if "ep" in self.disctitle.lower() or len(unique_artists) <= 1:
             return True
         return False
 
@@ -258,13 +266,15 @@ class Metaguru(Helpers):
 
     @property
     def albumtype(self) -> str:
+        if "LP" in self.album_name or "LP" in self.disctitle:
+            return "album"
         if self.is_va:
             return "compilation"
         if self.catalognum:
             return "ep"
         return "album"
 
-    def _trackinfo(self, track: JSONDict) -> TrackInfo:
+    def _trackinfo(self, track: JSONDict, medium_total: int) -> TrackInfo:
         data = {
             "artist": track.get("artist") or self.albumartist,
             "artist_id": self.artist_id,
@@ -277,7 +287,7 @@ class Metaguru(Helpers):
             "disctitle": self.disctitle,
             "medium": self.medium,
             "medium_index": track.get("position"),
-            "medium_total": self.medium_total,
+            "medium_total": medium_total,
         }
         if NEW_BEETS:
             return TrackInfo(title=track.get("title"), track_id=track.get("url"), **data)
@@ -302,8 +312,14 @@ class Metaguru(Helpers):
         else:
             return TrackInfo(track.get("title"), self.album_id, **data)
 
-    @property
-    def albuminfo(self) -> AlbumInfo:
+    def albuminfo(self, include_all: bool) -> AlbumInfo:
+        if self.media == "Digital Media" or include_all:
+            filtered_tracks = self.tracks
+        else:
+            filtered_tracks = [t for t in self.tracks if not t["digital_only"]]
+
+        medium_total = len(filtered_tracks)
+        _tracks = [self._trackinfo(track, medium_total) for track in filtered_tracks]
         data = {
             "va": self.is_va,
             "year": self.release_date.year,
@@ -321,7 +337,7 @@ class Metaguru(Helpers):
         }
         if NEW_BEETS:
             return AlbumInfo(
-                [self._trackinfo(track) for track in self.tracks],
+                _tracks,
                 **{
                     "album": self.album_name,
                     "albumartist": self.albumartist,
@@ -336,13 +352,12 @@ class Metaguru(Helpers):
                 self.album_id,
                 self.albumartist,
                 self.artist_id,
-                tracks=[self._trackinfo(track) for track in self.tracks],
+                tracks=_tracks,
                 **data,
             )
 
-    @property
-    def album(self) -> AlbumInfo:
-        """Return an album for each available release format."""
+    def album(self, include_all: bool) -> AlbumInfo:
+        """Return album for the appropriate release format."""
         medias: JSONDict = {}
         try:
             for _format in self.meta["albumRelease"]:
@@ -354,7 +369,7 @@ class Metaguru(Helpers):
         for preference in self.preferred_media.split(","):
             if preference in medias:
                 self._media = medias[preference]
-                return self.albuminfo
+                return self.albuminfo(include_all)
         else:
             self._media = medias[DEFAULT_MEDIA]
-            return self.albuminfo
+            return self.albuminfo(include_all)
