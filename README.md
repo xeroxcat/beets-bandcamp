@@ -38,7 +38,7 @@ contain **digital only** (or alike).
 If you have `False` here, then, for example, a `Vinyl` media of an album will
 only include the tracks that are supposed to be found in that media.
 
-##### `search_max`
+#### `search_max`
 
 - Default: `10`.
 
@@ -47,13 +47,13 @@ specificity of queries and whether a suitable match is found, it could
 fetch 50+ results which may take a minute, so it'd make sense to bound
 this to some sort of sensible number. Usually, a match is found among the first 5 items.
 
-##### `lyrics`
+#### `lyrics`
 
 - Default: `false`.
 
 Add lyrics to the tracks if they are available.
 
-##### `art`
+#### `art`
 
 - Default: `false`.
 

@@ -1,3 +1,9 @@
+# [0.5.1] 2021-01-18
+
+### Fixed
+- Fixed readme headings where configuration options were shown in capitals on `PyPI`.
+
+
 # [0.5.0] 2021-01-18
 
 ### Added
