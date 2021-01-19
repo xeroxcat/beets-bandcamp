@@ -19,6 +19,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import logging
 import re
+from html import unescape
 from itertools import chain
 from operator import truth
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Set
@@ -73,7 +74,7 @@ class BandcampRequestsHandler:
         except requests.exceptions.RequestException:
             self._info("Error while fetching URL: {}", url)
             return ""
-        return response.text
+        return unescape(response.text)
 
 
 class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):

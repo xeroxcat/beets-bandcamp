@@ -1,3 +1,10 @@
+# [0.5.3] 2021-01-19
+
+### Fixed
+- For data that is parsed directly from the html, ampersands are now correctly
+  unescaped.
+
+
 # [0.5.2] 2021-01-18
 
 ### Fixed
