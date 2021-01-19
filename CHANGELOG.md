@@ -1,3 +1,10 @@
+# [0.5.4] Unreleased
+
+### Fixed
+- Handled the case of a sold-out release where the track listing isn't
+  available and don't exit with a KeyError.
+
+
 # [0.5.3] 2021-01-19
 
 ### Fixed

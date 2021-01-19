@@ -260,7 +260,7 @@ class Metaguru(Helpers):
     def albumartist(self) -> str:
         if self.is_va:
             return "Various Artists"
-        if self.is_single_artist and self.tracks[0]["artist"]:
+        if self.is_single_artist and self.tracks and self.tracks[0]["artist"]:
             return self.tracks[0]["artist"]
         return self.bandcamp_albumartist
 
