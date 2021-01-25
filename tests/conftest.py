@@ -7,7 +7,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug.bandcamp._metaguru import ALBUM_STATUS, DATA_SOURCE
+from beetsplug.bandcamp._metaguru import OFFICIAL, DATA_SOURCE
 
 JSONDict = Dict[str, Any]
 
@@ -79,7 +79,7 @@ class ReleaseInfo:
             catalognum=data["catalognum"],
             country=data["country"],
             mediums=data["mediums"],
-            albumstatus=ALBUM_STATUS,
+            albumstatus=OFFICIAL,
             media=self.media,
             data_source=DATA_SOURCE,
         )

@@ -185,6 +185,8 @@ def test_parse_country(name, expected):
         ("Christmas 2020", ""),
         ("RR4", "RR4"),
         ("Various Artists 001", ""),
+        ("C30 Cassette", ""),
+        ("BC30 Hello", "BC30"),
     ],
 )
 def test_parse_catalognum(album, expected):

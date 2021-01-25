@@ -20,7 +20,8 @@ if parse(beets_version) < parse("1.5.0"):
 
 JSONDict = Dict[str, Any]
 
-ALBUM_STATUS = "Official"
+OFFICIAL = "Official"
+PROMO = "Promotional"
 COUNTRY_OVERRIDES = {"UK": "GB"}
 DATE_FORMAT = "%d %B %Y"
 DATA_SOURCE = "bandcamp"
@@ -40,7 +41,7 @@ PATTERNS: Dict[str, Pattern] = {
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_exclude": re.compile(
-        r"vol(ume)?|artists?|2020|2021", flags=re.IGNORECASE
+        r"vol(ume)?|artists?|2020|2021|(^|[\s])C[\d][\d]", flags=re.IGNORECASE
     ),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "digital": re.compile(
@@ -48,7 +49,7 @@ PATTERNS: Dict[str, Pattern] = {
     ),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
-    "release_date": re.compile(r"released ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
+    "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
 ((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w]*)?
@@ -87,7 +88,8 @@ class Helpers:
 
     @staticmethod
     def parse_track_name(name: str) -> JSONDict:
-        track = re.search(PATTERNS["track_name"], name).groupdict()  # type: ignore
+        match = re.search(PATTERNS["track_name"], name)
+        track: JSONDict = match.groupdict()  # type: ignore
         title = track["title"]
         excl_digi_only_title = re.sub(PATTERNS["digital"], "", title)
         if excl_digi_only_title != title:
@@ -121,7 +123,7 @@ class Metaguru(Helpers):
     preferred_media: str
     meta: JSONDict
 
-    _media = None  # type: Dict[str, str]
+    _media = None  # type: Optional[Dict[str, str]]
 
     def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
         self.html = html
@@ -291,8 +293,7 @@ class Metaguru(Helpers):
         }
         if NEW_BEETS:
             return TrackInfo(title=track.get("title"), track_id=track.get("url"), **data)
-        else:
-            return TrackInfo(track.get("title"), track.get("url"), **data)
+        return TrackInfo(track.get("title"), track.get("url"), **data)
 
     @property
     def singleton(self) -> TrackInfo:
@@ -309,8 +310,7 @@ class Metaguru(Helpers):
         }
         if NEW_BEETS:
             return TrackInfo(title=track.get("title"), track_id=self.album_id, **data)
-        else:
-            return TrackInfo(track.get("title"), self.album_id, **data)
+        return TrackInfo(track.get("title"), self.album_id, **data)
 
     def albuminfo(self, include_all: bool) -> AlbumInfo:
         if self.media == "Digital Media" or include_all:
@@ -320,33 +320,23 @@ class Metaguru(Helpers):
 
         medium_total = len(filtered_tracks)
         _tracks = [self._trackinfo(track, medium_total) for track in filtered_tracks]
+        rel_date = self.release_date
         data = {
             "va": self.is_va,
-            "year": self.release_date.year,
-            "month": self.release_date.month,
-            "day": self.release_date.day,
+            "year": rel_date.year,
+            "month": rel_date.month,
+            "day": rel_date.day,
             "label": self.label,
             "catalognum": self.catalognum,
             "albumtype": self.albumtype,
             "data_url": self.album_id,
-            "albumstatus": ALBUM_STATUS,
+            "albumstatus": OFFICIAL if rel_date < date.today() else PROMO,
             "country": self.country,
             "media": self.media,
             "mediums": self.mediums,
             "data_source": DATA_SOURCE,
         }
-        if NEW_BEETS:
-            return AlbumInfo(
-                _tracks,
-                **{
-                    "album": self.album_name,
-                    "albumartist": self.albumartist,
-                    "album_id": self.album_id,
-                    "artist_id": self.artist_id,
-                },
-                **data,
-            )
-        else:
+        if not NEW_BEETS:
             return AlbumInfo(
                 self.album_name,
                 self.album_id,
@@ -355,6 +345,16 @@ class Metaguru(Helpers):
                 tracks=_tracks,
                 **data,
             )
+        return AlbumInfo(
+            _tracks,
+            **{
+                "album": self.album_name,
+                "albumartist": self.albumartist,
+                "album_id": self.album_id,
+                "artist_id": self.artist_id,
+            },
+            **data,
+        )
 
     def album(self, include_all: bool) -> AlbumInfo:
         """Return album for the appropriate release format."""
@@ -373,6 +373,6 @@ class Metaguru(Helpers):
             if preference in medias:
                 self._media = medias[preference]
                 return self.albuminfo(include_all)
-        else:
-            self._media = medias[DEFAULT_MEDIA]
-            return self.albuminfo(include_all)
+
+        self._media = medias[DEFAULT_MEDIA]
+        return self.albuminfo(include_all)
