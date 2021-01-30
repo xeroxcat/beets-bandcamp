@@ -1,4 +1,17 @@
-# [0.5.4] 2021-01-25
+## [0.5.5] 2021-01-30
+
+### Updated
+
+- Country name overrides for _Russia_ and _The Netherlands_ which deviate from the
+  official names.
+- Track names:
+  - If _digital_ and _exclusive_ are found in the name, it means it's digital-only.
+  - Artist / track splitting logic now won't split them on the dash if it doesn't have
+    spaces on both sides.
+  * `track_alt` field may now contain numerical values if track names start with them.
+    Previously, only vinyls were supported with `A1` / `B2` notation.
+
+## [0.5.4] 2021-01-25
 
 ### Added
 
@@ -18,15 +31,14 @@
 
 - Brought dev dependencies up-to-date.
 
-
-# [0.5.3] 2021-01-19
+## [0.5.3] 2021-01-19
 
 ### Fixed
 
 - For data that is parsed directly from the html, ampersands are now correctly
   unescaped.
 
-# [0.5.2] 2021-01-18
+## [0.5.2] 2021-01-18
 
 ### Fixed
 
@@ -34,13 +46,13 @@
   taken into account and merch is ignored. Previously, some albums would fail to
   be returned because of this.
 
-# [0.5.1] 2021-01-18
+## [0.5.1] 2021-01-18
 
 ### Fixed
 
 - Fixed readme headings where configuration options were shown in capitals on `PyPI`.
 
-# [0.5.0] 2021-01-18
+## [0.5.0] 2021-01-18
 
 ### Added
 
@@ -56,7 +68,7 @@
 
 - For LP Vinyls, the disc count and album type are now corrected.
 
-# [0.4.4] 2021-01-17
+## [0.4.4] 2021-01-17
 
 ### Fixed
 
@@ -64,7 +76,7 @@
   it against similar matches that could be found in the description, thanks
   @noahsager.
 
-# [0.4.3] 2021-01-17
+## [0.4.3] 2021-01-17
 
 ### Fixed
 
@@ -76,7 +88,7 @@
 - Info logs are now `DEBUG` logs so that they're not printed without the verbose
   mode, thanks @arogl.
 
-# [0.4.2] 2021-01-17
+## [0.4.2] 2021-01-17
 
 ### Fixed
 
@@ -88,13 +100,13 @@
 
 - Added the changelog.
 
-# [0.4.1] 2021-01-16
+## [0.4.1] 2021-01-16
 
 ### Fixed
 
 - Fixed installation instructions in the readme.
 
-# [0.4.0] 2021-01-16
+## [0.4.0] 2021-01-16
 
 ### Added
 

@@ -22,7 +22,11 @@ JSONDict = Dict[str, Any]
 
 OFFICIAL = "Official"
 PROMO = "Promotional"
-COUNTRY_OVERRIDES = {"UK": "GB"}
+COUNTRY_OVERRIDES = {
+    "Russia": "RU",  # pycountry: Russian Federation
+    "The Netherlands": "NL",  # pycountry: Netherlands
+    "UK": "GB",  # pycountry: Great Britain
+}
 DATE_FORMAT = "%d %B %Y"
 DATA_SOURCE = "bandcamp"
 DEFAULT_COUNTRY = "XW"
@@ -41,20 +45,20 @@ PATTERNS: Dict[str, Pattern] = {
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_exclude": re.compile(
-        r"vol(ume)?|artists?|2020|2021|(^|[\s])C[\d][\d]", flags=re.IGNORECASE
+        r"vol(ume)?|artists?|2020|2021|(^|\s)C\d\d|\d+/\d+", flags=re.IGNORECASE
     ),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
     "digital": re.compile(
-        r"(^DIGI ([\d]+\.\s?)?)|(?i:\s?[\[(]digi(tal)? (bonus|only)[\])])"
+        r"(^DIGI ([\d]+\.\s?)?)|(?i:\s?[\[(].*digi(tal)? (bonus|only|exclusive)[\])])"
     ),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
-((?P<track_alt>[ABCDEFGH]{1,3}\d\d?)[^\w]*)?
-(\s?(?P<artist>[^-]*[^ ])[^a-z]-\s?)?
-(?P<title>([\w]*-[\w])*[^-]*$)""",
+((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)[^\w]*)?
+(\s?(?P<artist>[^-]*)(\s-\s))?
+(?P<title>(\b([^\s]-|-[^\s]|[^-])+$))""",
         re.VERBOSE,
     ),
     "vinyl_name": re.compile(
@@ -89,7 +93,10 @@ class Helpers:
     @staticmethod
     def parse_track_name(name: str) -> JSONDict:
         match = re.search(PATTERNS["track_name"], name)
-        track: JSONDict = match.groupdict()  # type: ignore
+        try:
+            track = match.groupdict()
+        except AttributeError:
+            track = {"title": name, "artist": None, "track_alt": None}
         title = track["title"]
         excl_digi_only_title = re.sub(PATTERNS["digital"], "", title)
         if excl_digi_only_title != title:

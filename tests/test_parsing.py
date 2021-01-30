@@ -87,6 +87,15 @@ def test_parse_release_date(string, expected):
             },
         ),
         (
+            "1.Artist - Title",
+            {
+                "track_alt": "1",
+                "artist": "Artist",
+                "title": "Title",
+                "digital_only": False,
+            },
+        ),
+        (
             "DJ BEVERLY HILL$ - Raw Steeze",
             {
                 "track_alt": None,
@@ -140,6 +149,33 @@ def test_parse_release_date(string, expected):
                 "digital_only": False,
             },
         ),
+        (
+            "I'll Become Pure N-R-G",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "I'll Become Pure N-R-G",
+                "digital_only": False,
+            },
+        ),
+        (
+            "Messier 33 (Bandcamp Digital Exclusive)",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "Messier 33",
+                "digital_only": True,
+            },
+        ),
+        (
+            "&$%@#!",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "&$%@#!",
+                "digital_only": False,
+            },
+        ),
     ],
 )
 def test_parse_track_name(name, expected):
@@ -160,6 +196,8 @@ def test_parse_track_name(name, expected):
         ("New York", "US"),
         ("No Ones, Land", "XW"),
         ("", "XW"),
+        ("Utrecht, The Netherlands", "NL"),
+        ("Russia", "RU"),
     ],
 )
 def test_parse_country(name, expected):
@@ -187,6 +225,7 @@ def test_parse_country(name, expected):
         ("Various Artists 001", ""),
         ("C30 Cassette", ""),
         ("BC30 Hello", "BC30"),
+        ("Blood 1/4", ""),
     ],
 )
 def test_parse_catalognum(album, expected):
