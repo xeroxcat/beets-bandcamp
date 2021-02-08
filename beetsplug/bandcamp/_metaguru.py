@@ -56,7 +56,7 @@ PATTERNS: Dict[str, Pattern] = {
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
-((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)[^\w]*)?
+((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)\s?[.-][^\w]*)?
 (\s?(?P<artist>[^-]*)(\s-\s))?
 (?P<title>(\b([^\s]-|-[^\s]|[^-])+$))""",
         re.VERBOSE,
@@ -123,6 +123,13 @@ class Helpers:
     def parse_release_date(string: str) -> str:
         match = re.search(PATTERNS["release_date"], string)
         return match.groups()[0] if match else ""
+
+    @staticmethod
+    def get_duration(source: JSONDict) -> int:
+        for item in source.get("additionalProperty", []):
+            if item.get("name") == "duration_secs":
+                return floor(item.get("value", 0))
+        return 0
 
 
 class Metaguru(Helpers):
@@ -231,7 +238,13 @@ class Metaguru(Helpers):
             "@type": ["MusicRecording"],
             "name": "A1 - SMFORMA - Giliau nei garsas",
             "duration": "P00H04M43S"
-            "duration_secs": 283,
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "track_id", "value": 1867729685},
+                {"@type": "PropertyValue", "name": "duration_secs", "value": 222.162},
+                {"@type": "PropertyValue", "name": "file", "value": {"mp3-128": "...."}},
+                {"@type": "PropertyValue", "name": "streaming", "value": true},
+                {"@type": "PropertyValue", "name": "tracknum", "value": 2}
+            ],
         },
         """
         tracks = []
@@ -290,7 +303,7 @@ class Metaguru(Helpers):
             "data_source": DATA_SOURCE,
             "data_url": self.album_id,
             "index": track.get("position"),
-            "length": floor(track.get("duration_secs", 0)),
+            "length": self.get_duration(track),
             "media": self.media or DEFAULT_MEDIA,
             "track_alt": track.get("track_alt"),
             "disctitle": self.disctitle,
@@ -311,7 +324,7 @@ class Metaguru(Helpers):
             "data_source": DATA_SOURCE,
             "data_url": self.album_id,
             "index": 1,
-            "length": floor(self.meta.get("duration_secs", 0)),
+            "length": self.get_duration(self.meta),
             "media": self.media or DEFAULT_MEDIA,
             "track_alt": track.get("track_alt"),
         }

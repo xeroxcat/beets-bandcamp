@@ -1,3 +1,12 @@
+## [0.5.6] 2021-02-08
+
+### Fixed
+
+- Bandcamp updated their html format which broke track duration parsing. This is now fixed
+  and test html files are updated.
+
+
+
 ## [0.5.5] 2021-01-30
 
 ### Updated
@@ -9,7 +18,7 @@
   - Artist / track splitting logic now won't split them on the dash if it doesn't have
     spaces on both sides.
   * `track_alt` field may now contain numerical values if track names start with them.
-    Previously, only vinyls were supported with `A1` / `B2` notation.
+    Previously, only vinyl format was supported with the `A1` / `B2` notation.
 
 ## [0.5.4] 2021-01-25
 

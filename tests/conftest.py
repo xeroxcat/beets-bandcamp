@@ -179,7 +179,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
         image="https://f4.bcbits.com/img/a2798384948_10.jpg",
         artist_id=artist_id,
         album_id=f"{artist_id}/album/fld001-gareth-wild-common-assault-ep",
-        track_count=5,
+        track_count=6,
         media="Vinyl",
         disctitle="FLD001 - Common Assault EP",
     )
@@ -218,6 +218,13 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
             "Saturn Storm",
             365,
             "AA2",
+        ),
+        (
+            "aa3-gareth-wild-quadrant-locked-groove",
+            "Gareth Wild",
+            "Quadrant [Locked Groove]",
+            20,
+            "AA3",
         ),
     ]
     info.set_albuminfo(
