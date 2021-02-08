@@ -176,6 +176,15 @@ def test_parse_release_date(string, expected):
                 "digital_only": False,
             },
         ),
+        (
+            "24 Hours",
+            {
+                "track_alt": None,
+                "artist": None,
+                "title": "24 Hours",
+                "digital_only": False,
+            },
+        ),
     ],
 )
 def test_parse_track_name(name, expected):
@@ -198,6 +207,7 @@ def test_parse_track_name(name, expected):
         ("", "XW"),
         ("Utrecht, The Netherlands", "NL"),
         ("Russia", "RU"),
+        ("Montreal, Québec", "CA"),
     ],
 )
 def test_parse_country(name, expected):
@@ -221,11 +231,11 @@ def test_parse_country(name, expected):
         ("00M", ""),
         ("X-Coast - Dance Trax Vol.30", ""),
         ("Christmas 2020", ""),
-        ("RR4", "RR4"),
         ("Various Artists 001", ""),
         ("C30 Cassette", ""),
         ("BC30 Hello", "BC30"),
         ("Blood 1/4", ""),
+        ("Emotion 1 - Kulør 008", "Kulør 008"),
     ],
 )
 def test_parse_catalognum(album, expected):

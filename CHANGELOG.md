@@ -5,6 +5,18 @@
 - Bandcamp updated their html format which broke track duration parsing. This is now fixed
   and test html files are updated.
 
+- Fixed track name parser which would incorrectly parse a track name like `24 hours`,
+  ignoring the numbers from the beginning of the string.
+
+- Locations that have non-ascii characters in their names would not be identified
+  (something like _Montreal, Québec_) - now the characters are converted and
+  `pycountry` does understand them.
+
+- Fixed an edge case where an EP would be incorrectly misidentified as an album.
+
+### Updated
+
+- Catalogue number parser now requires at least two digits to find a good match.
 
 
 ## [0.5.5] 2021-01-30

@@ -6,6 +6,7 @@ from functools import reduce
 from math import floor
 from string import ascii_lowercase, digits
 from typing import Any, Dict, List, Optional, Pattern
+from unicodedata import normalize
 
 from beets import __version__ as beets_version
 from beets.autotag.hooks import AlbumInfo, TrackInfo
@@ -39,7 +40,7 @@ MEDIA_MAP = {
 }
 VALID_URL_CHARS = {*ascii_lowercase, *digits}
 
-_catalognum = r"([^\d\W]+[_\W]?\d+(?:\W\d|CD)?)"
+_catalognum = r"([^\d\W]+[_\W]?\d{2,}(?:\W\d|CD)?)"
 PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
@@ -201,11 +202,14 @@ class Metaguru(Helpers):
     @property
     def country(self) -> str:
         country = self._search(PATTERNS["country"])
+        ascii_name = normalize("NFKD", country).encode("ascii", "ignore").decode()
         try:
             return (
                 COUNTRY_OVERRIDES.get(country)
-                or getattr(countries.get(name=country, default=object), "alpha_2", None)
-                or subdivisions.lookup(country).country_code
+                or getattr(
+                    countries.get(name=ascii_name, default=object), "alpha_2", None
+                )
+                or subdivisions.lookup(ascii_name).country_code
             )
         except LookupError:
             return DEFAULT_COUNTRY
@@ -262,7 +266,9 @@ class Metaguru(Helpers):
             for t in self.tracks
         }
         unique_artists.discard(None)
-        if "ep" in self.disctitle.lower() or len(unique_artists) <= 1:
+        if any(
+            ("EP" in self.disctitle, "EP" in self.album_name, len(unique_artists) <= 1)
+        ):
             return True
         return False
 
@@ -282,7 +288,7 @@ class Metaguru(Helpers):
     def albumartist(self) -> str:
         if self.is_va:
             return "Various Artists"
-        if self.is_single_artist and self.tracks and self.tracks[0]["artist"]:
+        if self.is_single_artist and self.tracks and self.tracks[0].get("artist"):
             return self.tracks[0]["artist"]
         return self.bandcamp_albumartist
 
@@ -292,7 +298,7 @@ class Metaguru(Helpers):
             return "album"
         if self.is_va:
             return "compilation"
-        if self.catalognum:
+        if self.catalognum or "EP" in self.disctitle or "EP" in self.album_name:
             return "ep"
         return "album"
 
