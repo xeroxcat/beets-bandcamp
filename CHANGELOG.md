@@ -1,3 +1,13 @@
+## [0.5.7] 2021-02-10
+
+### Fixed
+
+- For the case when a track or an album is getting imported through the id / URL mode, we now
+  check whether the provided URL is a Bandcamp link. In some cases parsing foreign URLs
+  results in decoding errors, so we'd like to catch those URLs early. Thanks @arogl for
+  spotting this.
+
+
 ## [0.5.6] 2021-02-08
 
 ### Fixed
@@ -8,7 +18,7 @@
 - Fixed track name parser which would incorrectly parse a track name like `24 hours`,
   ignoring the numbers from the beginning of the string.
 
-- Locations that have non-ascii characters in their names would not be identified
+- Locations that have non-ASCII characters in their names would not be identified
   (something like _Montreal, Québec_) - now the characters are converted and
   `pycountry` does understand them.
 

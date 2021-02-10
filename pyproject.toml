@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beetcamp"
-version = "0.5.6"
+version = "0.5.7"
 description = "Bandcamp autotagger source for beets (http://beets.io)."
 authors = ["Šarūnas Nejus <snejus@pm.me>"]
 readme = "README.md"

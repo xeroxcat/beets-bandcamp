@@ -22,7 +22,7 @@ import re
 from html import unescape
 from itertools import chain
 from operator import truth
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Union
 
 import beets
 import beets.ui
@@ -113,8 +113,13 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         self.register_listener("pluginload", self.loaded)
 
     @staticmethod
-    def _from_bandcamp(item: Item) -> bool:
-        return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
+    def _from_bandcamp(item: Union[Item, str]) -> bool:
+        """When Item isn't available, this expects to receive a url."""
+        if isinstance(item, Item):
+            return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
+        if isinstance(item, str):
+            return "bandcamp" in item
+        return False
 
     def add_lyrics(self, item: Item, write: bool = False) -> None:
         """Fetch and store lyrics for a single item. If ``write``, then the
@@ -196,11 +201,11 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID."""
-        return self.get_album_info(album_id)
+        return self.get_album_info(album_id) if self._from_bandcamp(album_id) else None
 
     def track_for_id(self, track_id: str) -> Optional[TrackInfo]:
         """Fetch a track by its bandcamp ID."""
-        return self.get_track_info(track_id)
+        return self.get_track_info(track_id) if self._from_bandcamp(track_id) else None
 
     def get_album_info(self, url: str) -> Optional[AlbumInfo]:
         """Return an AlbumInfo object for a bandcamp album page.
