@@ -84,27 +84,23 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
-        # TODO: Make this configurable
-        if hasattr(album, "art_source") and album.art_source == DATA_SOURCE:
-            url = album.mb_albumid
-            if isinstance(url, six.string_types) and DATA_SOURCE in url:
-                html = self._get(url)
-                if html:
-                    try:
-                        yield self._candidate(
-                            url=Metaguru(html).image, match=fetchart.Candidate.MATCH_EXACT
-                        )
-                    except Exception:
-                        self._info("Unexpected parsing error fetching album art")
-                else:
-                    self._info("Could not connect to the URL")
-            else:
-                self._info("Not fetching art for a non-bandcamp album")
-        else:
-            self._info("Art cover is already present")
+        if not hasattr(album, "art_source") or album.art_source != DATA_SOURCE:
+            self._info("Skipping: Art cover is already present")
+            yield None
+        url = album.mb_albumid
+        if isinstance(url, six.string_types) and DATA_SOURCE in url:
+            self._info("Skipping: Non-bandcamp source")
+            yield None
+
+        yield self._candidate(
+            url=Metaguru(self._get(url)).image,
+            match=fetchart.Candidate.MATCH_EXACT,
+        )
 
 
 class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
+    _guru = None  # type: Metaguru
+
     def __init__(self) -> None:
         super().__init__()
         self.config.add(DEFAULT_CONFIG.copy())
@@ -121,34 +117,36 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             return "bandcamp" in item
         return False
 
-    def add_lyrics(self, item: Item, write: bool = False) -> None:
-        """Fetch and store lyrics for a single item. If ``write``, then the
-        lyrics will also be written to the file itself.
+    def guru(self, album_url: str) -> Metaguru:
+        if not self._guru:
+            self._guru = Metaguru(self._get(album_url), self.media)
+        return self._guru
+
+    def add_additional_data(self, item: Item, write: bool = False) -> None:
+        """Fetch and store:
+        * lyrics, if enabled
+        * release description as comments
         """
-        if not item.lyrics:
-            html = self._get(item.mb_trackid)
-            if html:
-                lyrics = Metaguru(html, self.media).lyrics
-                if lyrics:
-                    self._info("Fetched lyrics: {}", item)
-                    item.lyrics = lyrics
-                    if write:
-                        item.try_write()
-                    item.store()
-                else:
-                    self._info("Lyrics not found: {}", item)
-            else:
-                self._info("Could not reach bandcamp: {}", item)
-        else:
-            self._info("Lyrics are already present: {}", item)
+        guru = self.guru(item.mb_albumid)
+        for field in ("lyrics", "description"):
+            if getattr(item, field, None):
+                self._info("{} are already present on {}", field, item)
+                continue
+
+            setattr(item, field, getattr(guru, field))
+            if getattr(item, field, None):
+                self._info("Fetched lyrics: {}", item)
+
+        if write:
+            item.try_write()
+        item.store()
 
     def imported(self, _: Any, task: Any) -> None:
-        """Import hook for fetching lyrics from bandcamp automatically."""
+        """Import hook for fetching additional data from bandcamp."""
         if self.config["lyrics"]:
             for item in task.imported_items():
-                # Only fetch lyrics for items from bandcamp
                 if self._from_bandcamp(item):
-                    self.add_lyrics(item, True)
+                    self.add_additional_data(item, True)
 
     def loaded(self) -> None:
         """Add our own artsource to the fetchart plugin."""
@@ -173,8 +171,8 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                 return url
         return None
 
-    def candidates(self, items, artist, album, *args):
-        # type: (List[Item], str, str, bool) -> Iterator[AlbumInfo]
+    def candidates(self, items, artist, album, *_):
+        # type: (List[Item], str, str, Any) -> Iterator[AlbumInfo]
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
         """

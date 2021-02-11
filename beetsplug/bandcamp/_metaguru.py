@@ -95,7 +95,7 @@ class Helpers:
     def parse_track_name(name: str) -> JSONDict:
         match = re.search(PATTERNS["track_name"], name)
         try:
-            track = match.groupdict()
+            track = match.groupdict()  # type: ignore
         except AttributeError:
             track = {"title": name, "artist": None, "track_alt": None}
         title = track["title"]
@@ -164,6 +164,10 @@ class Metaguru(Helpers):
     @property
     def artist_id(self) -> str:
         return self.meta["byArtist"]["@id"]
+
+    @property
+    def description(self) -> Optional[str]:
+        return self.meta.get("description")
 
     @property
     def image(self) -> str:
