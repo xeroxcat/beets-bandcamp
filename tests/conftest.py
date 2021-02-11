@@ -7,7 +7,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
-from beetsplug.bandcamp._metaguru import OFFICIAL, DATA_SOURCE
+from beetsplug.bandcamp._metaguru import DATA_SOURCE, NEW_BEETS, OFFICIAL
 
 JSONDict = Dict[str, Any]
 
@@ -45,7 +45,7 @@ class ReleaseInfo:
             medium=1,
             medium_index=index,
             medium_total=self.track_count,
-            disctitle=self.disctitle
+            disctitle=self.disctitle,
         )
 
     def set_singleton(self, artist: str, title: str, length: int) -> None:
@@ -62,27 +62,38 @@ class ReleaseInfo:
         )
 
     def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
-        data = kwargs
-        self.albuminfo = AlbumInfo(
-            data["album"],
-            self.album_id,
-            data["albumartist"],
-            self.artist_id,
-            tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
+        data = dict(
             data_url=self.album_id,
-            year=data["release_date"].year,
-            month=data["release_date"].month,
-            day=data["release_date"].day,
-            label=data["label"],
-            va=data["va"],
-            albumtype=data["albumtype"],
-            catalognum=data["catalognum"],
-            country=data["country"],
-            mediums=data["mediums"],
+            year=kwargs["release_date"].year,
+            month=kwargs["release_date"].month,
+            day=kwargs["release_date"].day,
+            label=kwargs["label"],
+            va=kwargs["va"],
+            albumtype=kwargs["albumtype"],
+            catalognum=kwargs["catalognum"],
+            country=kwargs["country"],
+            mediums=kwargs["mediums"],
             albumstatus=OFFICIAL,
             media=self.media,
             data_source=DATA_SOURCE,
         )
+        tracks = [self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)]
+        if not NEW_BEETS:
+            self.albuminfo = AlbumInfo(
+                data["album"],
+                self.album_id,
+                data["albumartist"],
+                self.artist_id,
+                **data,
+            )
+        else:
+            data.update(
+                album=kwargs["album"],
+                album_id=self.album_id,
+                albumartist=kwargs["albumartist"],
+                artist_id=self.artist_id,
+            )
+            self.albuminfo = AlbumInfo(tracks, **data)
 
 
 @pytest.fixture
@@ -335,7 +346,7 @@ def ep() -> Tuple[str, ReleaseInfo]:
 
 
 @pytest.fixture
-def ep_album(request) -> Tuple[str, ReleaseInfo]:
+def ep_album() -> Tuple[str, ReleaseInfo]:
     return ep()
 
 

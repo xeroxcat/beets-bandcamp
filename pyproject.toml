@@ -14,7 +14,8 @@ include = ["LICENSE", "README.md"]
 [tool.poetry.dependencies]
 python = "^3.6"
 
-beets = ">=1.4.6"
+# beets = ">=1.4.6"
+beets = { git = "https://github.com/beetbox/beets.git" }
 requests = "*"
 cached-property = "^1.5.2"
 pycountry = "^20.7.3"
