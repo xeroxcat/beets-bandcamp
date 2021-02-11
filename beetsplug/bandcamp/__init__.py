@@ -84,18 +84,24 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
         """Return the url for the cover from the bandcamp album page.
         This only returns cover art urls for bandcamp albums (by id).
         """
-        if not hasattr(album, "art_source") or album.art_source != DATA_SOURCE:
-            self._info("Skipping: Art cover is already present")
-            yield None
-        url = album.mb_albumid
-        if isinstance(url, six.string_types) and DATA_SOURCE in url:
-            self._info("Skipping: Non-bandcamp source")
-            yield None
-
-        yield self._candidate(
-            url=Metaguru(self._get(url)).image,
-            match=fetchart.Candidate.MATCH_EXACT,
-        )
+        # TODO: Make this configurable
+        if hasattr(album, "art_source") and album.art_source == DATA_SOURCE:
+            url = album.mb_albumid
+            if isinstance(url, six.string_types) and DATA_SOURCE in url:
+                html = self._get(url)
+                if html:
+                    try:
+                        yield self._candidate(
+                            url=Metaguru(html).image, match=fetchart.Candidate.MATCH_EXACT
+                        )
+                    except Exception:
+                        self._info("Unexpected parsing error fetching album art")
+                else:
+                    self._info("Could not connect to the URL")
+            else:
+                self._info("Not fetching art for a non-bandcamp album")
+        else:
+            self._info("Art cover is already present")
 
 
 class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
