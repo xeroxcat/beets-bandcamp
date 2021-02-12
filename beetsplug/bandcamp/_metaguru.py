@@ -233,10 +233,13 @@ class Metaguru(Helpers):
         return 1
 
     @property
-    def description(self) -> Optional[str]:
-        return self.meta.get("description") or (
-            self._media.get("description") if self._media else None
-        )
+    def description(self) -> str:
+        descr = self.meta.get("description", "")
+        if not descr and self._media:
+            descr = self._media.get("description", "")
+            if descr.startswith("Includes high-quality dow"):
+                descr = ""
+        return descr
 
     @cached_property
     def tracks(self) -> List[JSONDict]:
