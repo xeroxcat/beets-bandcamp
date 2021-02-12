@@ -144,6 +144,7 @@ class Metaguru(Helpers):
         self.html = html
         self.preferred_media = media
 
+        self.meta = {}
         match = re.search(PATTERNS["meta"], html)
         if match:
             self.meta = json.loads(match.group())
@@ -164,10 +165,6 @@ class Metaguru(Helpers):
     @property
     def artist_id(self) -> str:
         return self.meta["byArtist"]["@id"]
-
-    @property
-    def description(self) -> Optional[str]:
-        return self.meta.get("description")
 
     @property
     def image(self) -> str:
@@ -235,6 +232,12 @@ class Metaguru(Helpers):
         """We can't tell the number of current disc for a multi-disc release."""
         return 1
 
+    @property
+    def description(self) -> Optional[str]:
+        return self.meta.get("description") or (
+            self._media.get("description") if self._media else None
+        )
+
     @cached_property
     def tracks(self) -> List[JSONDict]:
         """`raw_track` example
@@ -270,19 +273,21 @@ class Metaguru(Helpers):
             for t in self.tracks
         }
         unique_artists.discard(None)
-        if any(
-            ("EP" in self.disctitle, "EP" in self.album_name, len(unique_artists) <= 1)
-        ):
-            return True
-        return False
+        return len(unique_artists) <= 1
+
+    @property
+    def is_lp(self) -> bool:
+        return "LP" in self.album_name or "LP" in self.disctitle
+
+    @cached_property
+    def is_ep(self) -> bool:
+        return "EP" in self.album_name or "EP" in self.disctitle
 
     @cached_property
     def is_va(self) -> bool:
-        if "Various Artists" in self.album_name or (
-            len(self.tracks) > 4 and not self.is_single_artist
-        ):
-            return True
-        return False
+        return "Various Artists" in self.album_name or (
+            not self.is_single_artist and not self.is_ep
+        )
 
     @property
     def bandcamp_albumartist(self) -> str:
@@ -298,11 +303,11 @@ class Metaguru(Helpers):
 
     @property
     def albumtype(self) -> str:
-        if "LP" in self.album_name or "LP" in self.disctitle:
+        if self.is_lp:
             return "album"
         if self.is_va:
             return "compilation"
-        if self.catalognum or "EP" in self.disctitle or "EP" in self.album_name:
+        if self.is_ep:
             return "ep"
         return "album"
 
@@ -365,6 +370,7 @@ class Metaguru(Helpers):
             "media": self.media,
             "mediums": self.mediums,
             "data_source": DATA_SOURCE,
+            "albumartist": self.albumartist,
         }
         if not NEW_BEETS:
             return AlbumInfo(
@@ -379,7 +385,7 @@ class Metaguru(Helpers):
             _tracks,
             **{
                 "album": self.album_name,
-                "albumartist": self.albumartist,
+                "artist": self.albumartist,
                 "album_id": self.album_id,
                 "artist_id": self.artist_id,
             },

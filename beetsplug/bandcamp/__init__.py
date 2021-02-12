@@ -19,10 +19,11 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import logging
 import re
+from functools import partial
 from html import unescape
 from itertools import chain
-from operator import truth
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Union
+from operator import attrgetter, truth
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Set, Union
 
 import beets
 import beets.ui
@@ -43,6 +44,7 @@ DEFAULT_CONFIG: JSONDict = {
     "search_max": 10,
     "lyrics": False,
     "art": False,
+    "exclude_extra_fields": [],
 }
 
 SEARCH_URL = "https://bandcamp.com/search?q={0}&page={1}"
@@ -52,6 +54,11 @@ USER_AGENT = "beets/{} +http://beets.radbox.org/".format(beets.__version__)
 ALBUM_SEARCH = "album"
 ARTIST_SEARCH = "band"
 TRACK_SEARCH = "track"
+
+ADDITIONAL_DATA_MAP: Dict[str, str] = {
+    "lyrics": "lyrics",
+    "description": "comments",
+}
 
 
 class BandcampRequestsHandler:
@@ -92,9 +99,10 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
                 if html:
                     try:
                         yield self._candidate(
-                            url=Metaguru(html).image, match=fetchart.Candidate.MATCH_EXACT
+                            url=self.guru(html).image,
+                            match=fetchart.Candidate.MATCH_EXACT,
                         )
-                    except Exception:
+                    except (KeyError, AttributeError, ValueError):
                         self._info("Unexpected parsing error fetching album art")
                 else:
                     self._info("Could not connect to the URL")
@@ -105,43 +113,71 @@ class BandcampAlbumArt(BandcampRequestsHandler, fetchart.RemoteArtSource):
 
 
 class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
-    _guru = None  # type: Metaguru
+    _gurucache: Dict[str, Metaguru]
+
+    media: str
+    excluded_extra_fields: Set[str]
 
     def __init__(self) -> None:
         super().__init__()
         self.config.add(DEFAULT_CONFIG.copy())
+        # ~~~ DEPRECATED
+        if not self.config["lyrics"]:
+            ADDITIONAL_DATA_MAP.pop("lyrics", None)
+        # ~~~
         self.media = self.config["preferred_media"].as_str()
+        self.excluded_extra_fields = set(self.config["exclude_extra_fields"].get())
         self.import_stages = [self.imported]
         self.register_listener("pluginload", self.loaded)
+        self._gurucache = dict()
 
     @staticmethod
-    def _from_bandcamp(item: Union[Item, str]) -> bool:
-        """When Item isn't available, this expects to receive a url."""
-        if isinstance(item, Item):
-            return hasattr(item, "data_source") and item.data_source == DATA_SOURCE
-        if isinstance(item, str):
-            return "bandcamp" in item
-        return False
+    def _from_bandcamp(clue: Union[Item, str]) -> bool:
+        """Accepts either an item or the mb_artistid."""
+        if isinstance(clue, Item):
+            clue = clue.mb_albumid or clue.mb_trackid
+        return "bandcamp" in clue or (
+            clue.startswith("http") and ("album" in clue or "track" in clue)
+        )
 
-    def guru(self, album_url: str) -> Metaguru:
-        if not self._guru:
-            self._guru = Metaguru(self._get(album_url), self.media)
-        return self._guru
+    def guru(self, url: str, html: str = None) -> Optional[Metaguru]:
+        """Return cached guru. If there isn't one, fetch the url if html isn't
+        already given, initialise guru and add it to the cache. This way they
+        be re-used by separate import stages.
+        """
+        if url in self._gurucache:
+            return self._gurucache[url]
+        if not html:
+            html = self._get(url)
+        if html:
+            self._gurucache[url] = Metaguru(html, self.media)
+        return self._gurucache.get(url)
 
     def add_additional_data(self, item: Item, write: bool = False) -> None:
         """Fetch and store:
         * lyrics, if enabled
         * release description as comments
         """
-        guru = self.guru(item.mb_albumid)
-        for field in ("lyrics", "description"):
-            if getattr(item, field, None):
-                self._info("{} are already present on {}", field, item)
+        guru = self.guru(item.mb_albumid or item.mb_trackid)
+
+        backup = ""
+        if item.comments.startswith == "Visit http":
+            backup = item.comments
+            item.comments = ""
+
+        for bandcamp_field, item_field in ADDITIONAL_DATA_MAP.items():
+            if item_field in self.excluded_extra_fields:
                 continue
 
-            setattr(item, field, getattr(guru, field))
-            if getattr(item, field, None):
-                self._info("Fetched lyrics: {}", item)
+            if getattr(item, item_field, None):
+                self._info("{} field: already present on {}", item_field, item)
+                continue
+
+            setattr(item, item_field, getattr(guru, bandcamp_field))
+            if getattr(item, item_field, None):
+                self._info("Obtained {} for {}", bandcamp_field, item)
+        if not item.comments:
+            item.comments = backup
 
         if write:
             item.try_write()
@@ -149,10 +185,9 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def imported(self, _: Any, task: Any) -> None:
         """Import hook for fetching additional data from bandcamp."""
-        if self.config["lyrics"]:
-            for item in task.imported_items():
-                if self._from_bandcamp(item):
-                    self.add_additional_data(item, True)
+        for item in task.imported_items():
+            if self._from_bandcamp(item):
+                self.add_additional_data(item, write=True)
 
     def loaded(self) -> None:
         """Add our own artsource to the fetchart plugin."""
@@ -177,8 +212,8 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                 return url
         return None
 
-    def candidates(self, items, artist, album, *_):
-        # type: (List[Item], str, str, Any) -> Iterator[AlbumInfo]
+    def candidates(self, items, artist, album, va_likely, extra_tags=None):
+        # type: (List[Item], str, str, bool, JSONDict) -> Iterator[AlbumInfo]
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
         """
@@ -205,11 +240,11 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def album_for_id(self, album_id: str) -> Optional[AlbumInfo]:
         """Fetch an album by its bandcamp ID."""
-        return self.get_album_info(album_id) if self._from_bandcamp(album_id) else None
+        return self.get_album_info(album_id)
 
     def track_for_id(self, track_id: str) -> Optional[TrackInfo]:
         """Fetch a track by its bandcamp ID."""
-        return self.get_track_info(track_id) if self._from_bandcamp(track_id) else None
+        return self.get_track_info(track_id)
 
     def get_album_info(self, url: str) -> Optional[AlbumInfo]:
         """Return an AlbumInfo object for a bandcamp album page.
@@ -219,15 +254,24 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         if "/track/" in url:
             match = re.search(ALBUM_URL_IN_TRACK, html)
             if match:
-                html = self._get(match.groups()[0])
+                url = match.groups()[0]
+                html = self._get(url)
 
         include_all = self.config["include_digital_only_tracks"]
-        return Metaguru(html, self.media).album(include_all) if html else None
+        guru = self.guru(url, html=html)
+        return self.handle(partial(guru.album, include_all), url) if guru else None
 
     def get_track_info(self, url: str) -> Optional[TrackInfo]:
         """Returns a TrackInfo object for a bandcamp track page."""
-        html = self._get(url)
-        return Metaguru(html, self.media).singleton if html else None
+        guru = self.guru(url)
+        return self.handle(partial(attrgetter("singleton"), guru), url) if guru else None
+
+    def handle(self, call: Callable, _id: str) -> Any:
+        try:
+            return call()
+        except (KeyError, ValueError, AttributeError):
+            self._exc("Failed obtaining {}", _id)
+            return None
 
     def _search(self, query: str, search_type: str = ALBUM_SEARCH) -> Iterator[str]:
         """Return an iterator for item URLs of type search_type matching the query."""

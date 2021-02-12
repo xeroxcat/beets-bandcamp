@@ -1,3 +1,4 @@
+"""Module for tests related to parsing."""
 import pytest
 
 from beetsplug.bandcamp._metaguru import Metaguru, urlify

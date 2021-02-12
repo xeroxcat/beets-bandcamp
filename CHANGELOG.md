@@ -1,3 +1,25 @@
+## [0.6.0] 2021-02-10
+
+### Added
+
+* Until now, the returned fields have been limited by what's available in
+  _search-specific_ `TrackInfo` and `AlbumInfo` objects. The marks the first attempt of
+  adding information to _library_ items that are available at later import stages.
+
+  If the `comments` field is empty or contains `Visit <artist-page>`, the plug-in
+  populates this field with the release description. This can be reverted by including it
+  in a new `exclude_extra_fields` list option.
+
+### Deprecated
+
+* `lyrics` configuration option is now deprecated and will be removed in one of the
+  upcoming releases (0.8.0 / 0.9.0 - before stable v1 goes out).  If lyrics aren't needed,
+  it should be added to the `exclude_extra_fields` list.
+
+### Fixed
+
+* The `albumartist` that would go missing for the `beets 1.5.0` import stage has now safely returned.
+
 ## [0.5.7] 2021-02-10
 
 ### Fixed
