@@ -48,7 +48,7 @@ PATTERNS: Dict[str, Pattern] = {
     "catalognum_exclude": re.compile(
         r"vol(ume)?|artists?|2020|2021|(^|\s)C\d\d|\d+/\d+", flags=re.IGNORECASE
     ),
-    "country": re.compile(r'location\ssecondaryText">(?:[\w\s]*, )?([\w\s,]+){1,4}'),
+    "country": re.compile(r'location\ssecondaryText">(?:[\w\s.]*, )?([\w\s,]+){1,4}'),
     "digital": re.compile(
         r"(^DIGI ([\d]+\.\s?)?)|(?i:\s?[\[(].*digi(tal)? (bonus|only|exclusive)[\])])"
     ),
@@ -280,15 +280,17 @@ class Metaguru(Helpers):
 
     @property
     def is_lp(self) -> bool:
-        return "LP" in self.album_name or "LP" in self.disctitle
+        return "LP" in self.album_name + self.disctitle
 
     @cached_property
     def is_ep(self) -> bool:
-        return "EP" in self.album_name or "EP" in self.disctitle
+        return "EP" in self.album_name + self.disctitle or (
+            self.media == "Vinyl" and len(self.tracks) == 4
+        )
 
     @cached_property
     def is_va(self) -> bool:
-        return "Various Artists" in self.album_name or (
+        return "various artists" in self.album_name.lower() or (
             not self.is_single_artist and not self.is_ep
         )
 
@@ -373,7 +375,6 @@ class Metaguru(Helpers):
             "media": self.media,
             "mediums": self.mediums,
             "data_source": DATA_SOURCE,
-            "albumartist": self.albumartist,
         }
         if not NEW_BEETS:
             return AlbumInfo(

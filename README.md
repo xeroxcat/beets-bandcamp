@@ -7,13 +7,27 @@ This is an up-to-date fork of [unrblt/beets-bandcamp](https://github.com/unrblt/
 
 # Installation
 
-Navigate to your `beets` virtual environment, install the plug-in with
+## Recommended method
 
+1. Install `beets` with `pipx` so that it's isolated from your system and other projects
 ```bash
-   pip install --user beetcamp
+pipx install beets
 ```
 
+2. Inject `beetcamp` and other dependencies that you need
+```bash
+pipx inject beets beetcamp [python-mpd2 ...]
+```
 and add `bandcamp` to the `plugins` list to your beets configuration file.
+
+## Otherwise
+
+Navigate to your `beets` virtual environment and install the plug-in with
+
+```bash
+   pip install beetcamp
+```
+
 
 
 # Configuration

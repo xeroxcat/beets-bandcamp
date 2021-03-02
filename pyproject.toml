@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beetcamp"
-version = "0.6.0"
+version = "0.6.1"
 description = "Bandcamp autotagger source for beets (http://beets.io)."
 authors = ["Šarūnas Nejus <snejus@pm.me>"]
 readme = "README.md"
@@ -15,7 +15,6 @@ include = ["LICENSE", "README.md"]
 python = "^3.6"
 
 beets = ">=1.4.6"
-# beets = { git = "https://github.com/beetbox/beets.git" }
 requests = "*"
 cached-property = "^1.5.2"
 pycountry = "^20.7.3"

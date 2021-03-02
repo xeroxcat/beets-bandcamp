@@ -1,3 +1,16 @@
+## [0.6.1] 2021-03-02
+
+### Updated
+
+* Added _recommended_ installation method to the readme.
+* Updated tox configuration to include tests for `beets < 1.5` and `beets > 1.5`.
+
+### Fixed
+
+* Fixed country name parser to mind names like `St. Louis` - it previously didn't take the
+  full stops into account.
+
+
 ## [0.6.0] 2021-02-10
 
 ### Added

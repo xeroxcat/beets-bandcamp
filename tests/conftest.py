@@ -80,10 +80,11 @@ class ReleaseInfo:
         tracks = [self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)]
         if not NEW_BEETS:
             self.albuminfo = AlbumInfo(
-                data["album"],
+                kwargs["album"],
                 self.album_id,
-                data["albumartist"],
+                kwargs["albumartist"],
                 self.artist_id,
+                tracks=tracks,
                 **data,
             )
         else:

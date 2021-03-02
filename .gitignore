@@ -1,5 +1,7 @@
 *.pyc
 .coverage
+.tox/
 beets_bandcamp.egg-info
 dist
 reports
+htmls

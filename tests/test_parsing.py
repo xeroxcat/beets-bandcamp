@@ -209,6 +209,7 @@ def test_parse_track_name(name, expected):
         ("Utrecht, The Netherlands", "NL"),
         ("Russia", "RU"),
         ("Montreal, Québec", "CA"),
+        ("St. Louis, Missouri", "US"),
     ],
 )
 def test_parse_country(name, expected):
