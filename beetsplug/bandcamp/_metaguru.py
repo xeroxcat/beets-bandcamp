@@ -209,7 +209,7 @@ class Metaguru(Helpers):
         datestr = self.parse_release_date(self.html)
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
-    @property
+    @cached_property
     def disctitle(self) -> str:
         if self._media and self.media != "Digital Media":
             return self._media.get("name", "")
@@ -288,7 +288,7 @@ class Metaguru(Helpers):
             raw_tracks = [{"item": self.meta}]
         for raw_track in raw_tracks:
             track = raw_track["item"]
-            track["position"] = raw_track.get("position")
+            track["position"] = raw_track.get("position") or 1
             track.update(self.check_digital_only(track["name"]))
             track.update(self.parse_track_name(track["name"]))
             tracks.append(track)
@@ -345,55 +345,52 @@ class Metaguru(Helpers):
             return "ep"
         return "album"
 
-    def _trackinfo(self, track: JSONDict, medium_total: int) -> TrackInfo:
+    @property
+    def _common(self) -> JSONDict:
+        return dict(
+            data_source=DATA_SOURCE,
+            media=self.media or DEFAULT_MEDIA,
+            data_url=self.album_id,
+            artist_id=self.artist_id,
+        )
+
+    @property
+    def _common_album(self) -> JSONDict:
+        return dict(
+            year=self.release_date.year,
+            month=self.release_date.month,
+            day=self.release_date.day,
+            label=self.label,
+            catalognum=self.catalognum,
+            albumtype=self.albumtype,
+            album=self.clean_album_name,
+            albumstatus=OFFICIAL if self.release_date < date.today() else PROMO,
+            country=self.country,
+        )
+
+    def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs) -> TrackInfo:
         return TrackInfo(
             title=track.get("title"),
             track_id=track.get("url"),
             artist=track.get("artist") or self.albumartist,
-            artist_id=self.artist_id,
-            data_source=DATA_SOURCE,
-            data_url=self.album_id,
             index=track.get("position"),
             length=self.get_duration(track),
-            media=self.media or DEFAULT_MEDIA,
             track_alt=track.get("track_alt"),
-            disctitle=self.disctitle,
+            disctitle=self.disctitle or None,
             medium=self.medium,
             medium_index=track.get("position"),
             medium_total=medium_total,
+            **self._common,
+            **kwargs,
         )
 
     @property
     def singleton(self) -> TrackInfo:
         self._singleton = True
-        track = self.parse_track_name(self.album_name)
-        data = dict(
-            title=track.get("title"),
-            track_id=self.album_id,
-            artist=track.get("artist") or self.bandcamp_albumartist,
-            artist_id=self.artist_id,
-            data_source=DATA_SOURCE,
-            data_url=self.album_id,
-            index=1,
-            length=self.get_duration(self.meta),
-            media=self.media or DEFAULT_MEDIA,
-            track_alt=track.get("track_alt"),
-        )
+        kwargs: JSONDict = {}
         if NEW_BEETS:
-            rel_date = self.release_date
-            data.update(
-                year=rel_date.year,
-                month=rel_date.month,
-                day=rel_date.day,
-                label=self.label,
-                catalognum=self.catalognum,
-                album=self.clean_album_name,
-                albumtype=self.albumtype,
-                albumartist=self.label,
-                albumstatus=OFFICIAL if rel_date < date.today() else PROMO,
-                country=self.country,
-            )
-        return TrackInfo(**data)
+            kwargs.update(**self._common_album, albumartist=self.bandcamp_albumartist)
+        return self._trackinfo(self.tracks.pop(), 1, **kwargs)
 
     def albuminfo(self, include_all: bool) -> AlbumInfo:
         if self.media == "Digital Media" or include_all:
@@ -403,25 +400,13 @@ class Metaguru(Helpers):
 
         medium_total = len(filtered_tracks)
         _tracks = [self._trackinfo(track, medium_total) for track in filtered_tracks]
-        rel_date = self.release_date
         return AlbumInfo(
-            album=self.clean_album_name,
+            **self._common,
+            **self._common_album,
             artist=self.albumartist,
             album_id=self.album_id,
-            artist_id=self.artist_id,
             va=self.is_va,
-            year=rel_date.year,
-            month=rel_date.month,
-            day=rel_date.day,
-            label=self.label,
-            catalognum=self.catalognum,
-            albumtype=self.albumtype,
-            data_url=self.album_id,
-            albumstatus=OFFICIAL if rel_date < date.today() else PROMO,
-            country=self.country,
-            media=self.media,
             mediums=self.mediums,
-            data_source=DATA_SOURCE,
             tracks=_tracks,
         )
 

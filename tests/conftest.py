@@ -2,7 +2,7 @@
 import codecs
 from dataclasses import dataclass
 from datetime import date
-from typing import Sequence, Tuple
+from typing import Optional, Tuple
 
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
@@ -17,52 +17,45 @@ class ReleaseInfo:
     artist_id: str
     track_count: int
     media: str
-    disctitle: str
+    disctitle: Optional[str]
     singleton = None  # type: TrackInfo
     albuminfo = None  # type: AlbumInfo
 
-    def trackinfo(self, index: int, info: Tuple) -> TrackInfo:
-        if len(info) == 4:
-            track_id, artist, title, length = info
-            alt = None
-        else:
-            track_id, artist, title, length, alt = info
-        track_url = f"{self.artist_id}/track/{track_id}"
-
-        return TrackInfo(
-            title=title,
+    def track_data(self, **kwargs) -> TrackInfo:
+        kget = kwargs.get
+        track_url = kget("track_id", f"{self.artist_id}/track/{kget('title_id')}")
+        return dict(
+            title=kget("title"),
             track_id=track_url,
-            index=index,
-            length=length,
-            data_url=self.album_id,
-            artist=artist,
+            artist=kget("artist"),
             artist_id=self.artist_id,
-            track_alt=alt,
             data_source=DATA_SOURCE,
+            data_url=self.album_id,
+            index=kget("index"),
+            length=kget("length"),
+            track_alt=kget("alt"),
             media=self.media,
             medium=1,
-            medium_index=index,
+            medium_index=kget("index"),
             medium_total=self.track_count,
             disctitle=self.disctitle,
         )
 
     def set_singleton(self, artist: str, title: str, length: int, **kwargs) -> None:
-        data = dict(
+        data = self.track_data(
             title=title,
             track_id=self.album_id,
             artist=artist,
-            artist_id=self.artist_id,
             length=length,
             index=1,
-            data_url=self.album_id,
-            data_source=DATA_SOURCE,
-            media=self.media,
         )
         if NEW_BEETS:
             data.update(**kwargs)
         self.singleton = TrackInfo(**data)
 
-    def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
+    def set_albuminfo(self, tracks, **kwargs):
+        fields = ["index", "title_id", "artist", "title", "length", "alt"]
+        iter_tracks = [zip(fields, (idx, *track)) for idx, track in enumerate(tracks, 1)]
         self.albuminfo = AlbumInfo(
             album=kwargs["album"],
             album_id=self.album_id,
@@ -81,7 +74,7 @@ class ReleaseInfo:
             albumstatus=OFFICIAL,
             media=self.media,
             data_source=DATA_SOURCE,
-            tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
+            tracks=[TrackInfo(**self.track_data(**dict(t))) for t in iter_tracks],
         )
 
 
@@ -95,7 +88,7 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
         album_id="https://mega-tech.bandcamp.com/track/matriark-arangel",
         track_count=1,
         media="Digital Media",
-        disctitle="",
+        disctitle=None,
     )
     info.set_singleton(
         artist="Matriark",
@@ -129,8 +122,8 @@ def single_track_album_search() -> Tuple[str, ReleaseInfo]:
         disctitle="CD",
     )
     tracks = [
-        ("live-at-parken", album_artist, "Live At PARKEN", 3600),
-        ("odondo", album_artist, "Odondo", 371),
+        ("live-at-parken", album_artist, "Live At PARKEN", 3600, None),
+        ("odondo", album_artist, "Odondo", 371, None),
     ]
     info.set_albuminfo(
         tracks,
@@ -165,10 +158,11 @@ def album() -> Tuple[str, ReleaseInfo]:
             album_artist,
             "The Human Experience (Empathy Mix)",
             504,
+            None,
         ),
-        ("parallell", album_artist, "Parallell", 487),
-        ("formulae", album_artist, "Formulae", 431),
-        ("biotope", album_artist, "Biotope", 421),
+        ("parallell", album_artist, "Parallell", 487, None),
+        ("formulae", album_artist, "Formulae", 431, None),
+        ("biotope", album_artist, "Biotope", 421, None),
     ]
     info.set_albuminfo(
         tracks,
@@ -265,7 +259,7 @@ def compilation() -> Tuple[str, ReleaseInfo]:
         album_id="https://ismusberlin.bandcamp.com/album/ismva0033",
         track_count=13,
         media="Digital Media",
-        disctitle="",
+        disctitle=None,
     )
     tracks = [
         (
@@ -273,12 +267,14 @@ def compilation() -> Tuple[str, ReleaseInfo]:
             "Zebar & Zimo",
             "Wish Granter (Original Mix)",
             414,
+            None,
         ),
         (
             "alpha-tracks-valimba-original-mix",
             "Alpha Tracks",
             "Valimba (Original Mix)",
             361,
+            None,
         ),
     ]
     info.set_albuminfo(
@@ -313,24 +309,28 @@ def ep() -> Tuple[str, ReleaseInfo]:
             "jeånne",
             "the devil's not ås blåck ås he is påinted (hård mix)",
             385,
+            None,
         ),
         (
             "je-nne-the-p-th-to-p-r-dise-begins-in-hell",
             "jeånne",
             "the påth to pårådise begins in hell",
             333,
+            None,
         ),
         (
             "dj-disrespect-vienna-warm-up-mix",
             "DJ DISRESPECT",
             "VIENNA (WARM UP MIX",
             315,
+            None,
         ),
         (
             "dj-disrespect-transition-athletic-mix",
             "DJ DISRESPECT",
             "TRANSITION (ATHLETIC MIX)",
             333,
+            None,
         ),
     ]
     info.set_albuminfo(
