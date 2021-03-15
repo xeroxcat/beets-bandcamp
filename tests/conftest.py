@@ -46,10 +46,10 @@ class ReleaseInfo:
             disctitle=self.disctitle,
         )
 
-    def set_singleton(self, artist: str, title: str, length: int) -> None:
-        self.singleton = TrackInfo(
-            title,
-            self.album_id,
+    def set_singleton(self, artist: str, title: str, length: int, **kwargs) -> None:
+        data = dict(
+            title=title,
+            track_id=self.album_id,
             artist=artist,
             artist_id=self.artist_id,
             length=length,
@@ -58,6 +58,9 @@ class ReleaseInfo:
             data_source=DATA_SOURCE,
             media=self.media,
         )
+        if NEW_BEETS:
+            data.update(**kwargs)
+        self.singleton = TrackInfo(**data)
 
     def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
         self.albuminfo = AlbumInfo(
@@ -94,7 +97,21 @@ def single_track_release() -> Tuple[str, ReleaseInfo]:
         media="Digital Media",
         disctitle="",
     )
-    info.set_singleton(artist="Matriark", title="Arangel", length=421)
+    info.set_singleton(
+        artist="Matriark",
+        title="Arangel",
+        length=421,
+        album="Matriark - Arangel",
+        albumartist="Megatech",
+        albumstatus="Official",
+        label="Megatech",
+        albumtype="single",
+        catalognum="",
+        year=2020,
+        month=11,
+        day=9,
+        country="SE",
+    )
     return codecs.open(test_html_file).read(), info
 
 
@@ -226,7 +243,7 @@ def album_with_track_alt() -> Tuple[str, ReleaseInfo]:
     ]
     info.set_albuminfo(
         tracks,
-        album="FLD001 // Gareth Wild - Common Assault EP",
+        album="Common Assault",
         albumartist="Gareth Wild",
         albumtype="ep",
         catalognum="FLD001",
@@ -318,7 +335,7 @@ def ep() -> Tuple[str, ReleaseInfo]:
     ]
     info.set_albuminfo(
         tracks,
-        album="fa010 | Kickdown Vienna",
+        album="Kickdown Vienna",
         albumartist="jeånne, DJ DISRESPECT",
         albumtype="ep",
         catalognum="fa010",

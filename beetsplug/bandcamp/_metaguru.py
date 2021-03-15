@@ -139,6 +139,7 @@ class Metaguru(Helpers):
     meta: JSONDict
 
     _media = None  # type: Optional[Dict[str, str]]
+    _singleton = False
 
     def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
         self.html = html
@@ -262,9 +263,13 @@ class Metaguru(Helpers):
         },
         """
         tracks = []
-        for raw_track in self.meta["track"].get("itemListElement", []):
+        if not self._singleton:
+            raw_tracks = self.meta["track"].get("itemListElement", [])
+        else:
+            raw_tracks = [{"item": self.meta}]
+        for raw_track in raw_tracks:
             track = raw_track["item"]
-            track["position"] = raw_track["position"]
+            track["position"] = raw_track.get("position")
             track.update(self.parse_track_name(track["name"]))
             tracks.append(track)
         return tracks
@@ -308,6 +313,8 @@ class Metaguru(Helpers):
 
     @property
     def albumtype(self) -> str:
+        if self._singleton:
+            return "single"
         if self.is_lp:
             return "album"
         if self.is_va:
@@ -336,20 +343,35 @@ class Metaguru(Helpers):
 
     @property
     def singleton(self) -> TrackInfo:
+        self._singleton = True
         track = self.parse_track_name(self.album_name)
-        data = {
-            "artist": track.get("artist") or self.bandcamp_albumartist,
-            "artist_id": self.artist_id,
-            "data_source": DATA_SOURCE,
-            "data_url": self.album_id,
-            "index": 1,
-            "length": self.get_duration(self.meta),
-            "media": self.media or DEFAULT_MEDIA,
-            "track_alt": track.get("track_alt"),
-        }
+        data = dict(
+            title=track.get("title"),
+            track_id=self.album_id,
+            artist=track.get("artist") or self.bandcamp_albumartist,
+            artist_id=self.artist_id,
+            data_source=DATA_SOURCE,
+            data_url=self.album_id,
+            index=1,
+            length=self.get_duration(self.meta),
+            media=self.media or DEFAULT_MEDIA,
+            track_alt=track.get("track_alt"),
+        )
         if NEW_BEETS:
-            return TrackInfo(title=track.get("title"), track_id=self.album_id, **data)
-        return TrackInfo(track.get("title"), self.album_id, **data)
+            rel_date = self.release_date
+            data.update(
+                year=rel_date.year,
+                month=rel_date.month,
+                day=rel_date.day,
+                label=self.label,
+                catalognum=self.catalognum,
+                album=self.clean_album_name,
+                albumtype=self.albumtype,
+                albumartist=self.label,
+                albumstatus=OFFICIAL if rel_date < date.today() else PROMO,
+                country=self.country,
+            )
+        return TrackInfo(**data)
 
     def albuminfo(self, include_all: bool) -> AlbumInfo:
         if self.media == "Digital Media" or include_all:
