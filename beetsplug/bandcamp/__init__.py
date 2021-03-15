@@ -204,6 +204,10 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
                     break
 
     def _cheat_mode(self, item: Item, name: str, _type: str) -> Optional[str]:
+        reimport_url = getattr(item, f"mb_{_type}id", "")
+        if "bandcamp" in reimport_url:
+            return reimport_url
+
         if "Visit" in item.comments:
             match = re.search(r"https:[/a-z.-]+com", item.comments)
             if match:
