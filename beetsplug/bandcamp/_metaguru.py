@@ -305,12 +305,14 @@ class Metaguru(Helpers):
 
     @property
     def is_lp(self) -> bool:
-        return "LP" in self.album_name + self.disctitle
+        return "LP" in self.album_name or "LP" in self.disctitle
 
     @cached_property
     def is_ep(self) -> bool:
-        return "EP" in self.album_name + self.disctitle or (
-            self.media == "Vinyl" and len(self.tracks) == 4
+        return (
+            "EP" in self.album_name
+            or "EP" in self.disctitle
+            or (self.media == "Vinyl" and len(self.tracks) == 4)
         )
 
     @cached_property
@@ -425,6 +427,7 @@ class Metaguru(Helpers):
 
     def album(self, include_all: bool) -> AlbumInfo:
         """Return album for the appropriate release format."""
+        # map available formats to appropriate names
         medias: JSONDict = {}
         try:
             for _format in self.meta["albumRelease"]:
@@ -436,10 +439,12 @@ class Metaguru(Helpers):
         except (KeyError, AttributeError):
             return None
 
+        # if preference is given and the format is available, return it
         for preference in self.preferred_media.split(","):
             if preference in medias:
                 self._media = medias[preference]
-                return self.albuminfo(include_all)
+                break
+        else:  # otherwise, use the default option
+            self._media = medias[DEFAULT_MEDIA]
 
-        self._media = medias[DEFAULT_MEDIA]
         return self.albuminfo(include_all)
