@@ -1,21 +1,65 @@
-## [0.6.1] 2021-03-02
+## [0.7.0] 2021-03-15
 
-### Updated
+### Added
 
-* Added _recommended_ installation method to the readme.
-* Updated tox configuration to include tests for `beets < 1.5` and `beets > 1.5`.
+- For those who use `beets >= 1.5.0`, singleton tracks are now enriched with similar metadata
+  to albums (depending on whether they are found of course):
+
+  - release date: `year`, `month`, `day`
+  - `label`
+  - `catalognum`
+  - `albumstatus`
+  - `country`
+  - `album`: 'Artist - Track' usually
+  - `albumtype`: `single`
+
+- Album names are now cleaned up. The following are removed from the names:
+
+  - Artist name (unless it's a singleton track)
+  - Label name
+  - Catalogue number
+  - Strings
+    - **Various Artists**
+    - **limited edition**
+    - **EP** (only if it is preceded by a space)
+  - If any of the above are preceded/followed by **-** or **|** characters, they are
+    removed together with spaces around them (if they are found)
+  - If any of the above (except **EP**) are enclosed in parentheses or square brackets,
+    they are also removed.
+
+  Examples:
+
+      Album - Various Artists -> Album
+      Various Artists - Album -> Album
+      Album EP                -> Album
+      [Label] Album EP        -> Album
+      Artist - Album EP       -> Album
+      Label | Album           -> Album
+      Album (limited edition) -> Album
+
+- Added _recommended_ installation method in the readme.
+- Added tox tests for `beets < 1.5` and `beets > 1.5` for python versions from 3.6 up to
+  3.9.
+- Sped up reimporting bandcamp items by checking whether the URL is already available
+  before searching.
+- Parsing: If track's name includes _bandcamp digital (bonus|only) etc._, **bandcamp** part gets
+  removed as well.
+
+### Changed
+
+- Internal simplifications regarding `beets` version difference handling.
 
 ### Fixed
 
-* Fixed country name parser to mind names like `St. Louis` - it previously didn't take the
-  full stops into account.
+- Parsing: country/location name parser now takes into account punctuation such as in `St.
+  Louis` - it previously ignored full stops.
 
 
 ## [0.6.0] 2021-02-10
 
 ### Added
 
-* Until now, the returned fields have been limited by what's available in
+- Until now, the returned fields have been limited by what's available in
   _search-specific_ `TrackInfo` and `AlbumInfo` objects. The marks the first attempt of
   adding information to _library_ items that are available at later import stages.
 
@@ -25,13 +69,13 @@
 
 ### Deprecated
 
-* `lyrics` configuration option is now deprecated and will be removed in one of the
-  upcoming releases (0.8.0 / 0.9.0 - before stable v1 goes out).  If lyrics aren't needed,
+- `lyrics` configuration option is now deprecated and will be removed in one of the
+  upcoming releases (0.8.0 / 0.9.0 - before stable v1 goes out). If lyrics aren't needed,
   it should be added to the `exclude_extra_fields` list.
 
 ### Fixed
 
-* The `albumartist` that would go missing for the `beets 1.5.0` import stage has now safely returned.
+- The `albumartist` that would go missing for the `beets 1.5.0` import stage has now safely returned.
 
 ## [0.5.7] 2021-02-10
 
@@ -41,7 +85,6 @@
   check whether the provided URL is a Bandcamp link. In some cases parsing foreign URLs
   results in decoding errors, so we'd like to catch those URLs early. Thanks @arogl for
   spotting this.
-
 
 ## [0.5.6] 2021-02-08
 
@@ -62,7 +105,6 @@
 ### Updated
 
 - Catalogue number parser now requires at least two digits to find a good match.
-
 
 ## [0.5.5] 2021-01-30
 
