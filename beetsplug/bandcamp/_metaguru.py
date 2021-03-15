@@ -4,8 +4,9 @@ import re
 from datetime import date, datetime
 from functools import reduce
 from math import floor
+from operator import truth
 from string import ascii_lowercase, digits
-from typing import Any, Dict, List, Optional, Pattern
+from typing import Any, Dict, List, Optional, Pattern, Union
 from unicodedata import normalize
 
 from beets import __version__ as beets_version
@@ -41,17 +42,14 @@ MEDIA_MAP = {
 VALID_URL_CHARS = {*ascii_lowercase, *digits}
 
 _catalognum = r"([^\d\W]+[_\W]?\d{2,}(?:\W\d|CD)?)"
+_exclusive = r"\s?[\[(](bandcamp )?(digi(tal)? )?(bonus|only|exclusive)[\])]"
 PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
-    "catalognum_exclude": re.compile(
-        r"vol(ume)?|artists?|2020|2021|(^|\s)C\d\d|\d+/\d+", flags=re.IGNORECASE
-    ),
+    "catalognum_excl": re.compile(r"(?i:vol(ume)?|artists)|202[01]|(^|\s)C\d\d|\d+/\d+"),
     "country": re.compile(r'location\ssecondaryText">(?:[\w\s.]*, )?([\w\s,]+){1,4}'),
-    "digital": re.compile(
-        r"(^DIGI ([\d]+\.\s?)?)|(?i:\s?[\[(].*digi(tal)? (bonus|only|exclusive)[\])])"
-    ),
+    "digital": re.compile(rf"^DIGI (\d+\.\s?)?|(?i:{_exclusive})"),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
@@ -92,20 +90,19 @@ class Helpers:
         return int(count) if count.isdigit() else conv[count.lower()]
 
     @staticmethod
+    def check_digital_only(name: str) -> Dict[str, Union[bool, str]]:
+        no_digi_only_name = re.sub(PATTERNS["digital"], "", name)
+        if no_digi_only_name != name:
+            return dict(digital_only=True, name=no_digi_only_name)
+        return dict(digital_only=False)
+
+    @staticmethod
     def parse_track_name(name: str) -> JSONDict:
         match = re.search(PATTERNS["track_name"], name)
         try:
-            track = match.groupdict()  # type: ignore
+            return match.groupdict()  # type: ignore
         except AttributeError:
-            track = {"title": name, "artist": None, "track_alt": None}
-        title = track["title"]
-        excl_digi_only_title = re.sub(PATTERNS["digital"], "", title)
-        if excl_digi_only_title != title:
-            track["digital_only"] = True
-            track["title"] = excl_digi_only_title
-        else:
-            track["digital_only"] = False
-        return track
+            return {"title": name, "artist": None, "track_alt": None}
 
     @staticmethod
     def parse_catalognum(album: str, disctitle: str) -> str:
@@ -114,7 +111,7 @@ class Helpers:
             (PATTERNS["catalognum"], disctitle),
             (PATTERNS["catalognum"], album),
         ]:
-            match = re.search(pattern, re.sub(PATTERNS["catalognum_exclude"], "", string))
+            match = re.search(pattern, re.sub(PATTERNS["catalognum_excl"], "", string))
             if match:
                 return [group for group in match.groups() if group].pop()
 
@@ -270,6 +267,7 @@ class Metaguru(Helpers):
         for raw_track in raw_tracks:
             track = raw_track["item"]
             track["position"] = raw_track.get("position")
+            track.update(self.check_digital_only(track["name"]))
             track.update(self.parse_track_name(track["name"]))
             tracks.append(track)
         return tracks

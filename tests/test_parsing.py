@@ -56,148 +56,78 @@ def test_parse_release_date(string, expected):
     [
         (
             "Title",
-            {"track_alt": None, "artist": None, "title": "Title", "digital_only": False},
+            {"track_alt": None, "artist": None, "title": "Title"},
         ),
         (
             "Artist - Title",
-            {
-                "track_alt": None,
-                "artist": "Artist",
-                "title": "Title",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": "Artist", "title": "Title"},
         ),
         (
             "A1. Artist - Title",
-            {
-                "track_alt": "A1",
-                "artist": "Artist",
-                "title": "Title",
-                "digital_only": False,
-            },
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
         ),
         (
             "A1- Artist - Title",
-            {
-                "track_alt": "A1",
-                "artist": "Artist",
-                "title": "Title",
-                "digital_only": False,
-            },
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
         ),
         (
             "A1.- Artist - Title",
-            {
-                "track_alt": "A1",
-                "artist": "Artist",
-                "title": "Title",
-                "digital_only": False,
-            },
+            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
         ),
         (
             "1.Artist - Title",
-            {
-                "track_alt": "1",
-                "artist": "Artist",
-                "title": "Title",
-                "digital_only": False,
-            },
+            {"track_alt": "1", "artist": "Artist", "title": "Title"},
         ),
         (
             "DJ BEVERLY HILL$ - Raw Steeze",
-            {
-                "track_alt": None,
-                "artist": "DJ BEVERLY HILL$",
-                "title": "Raw Steeze",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
         ),
         (
             "LI$INGLE010 - cyberflex - LEVEL X",
-            {
-                "track_alt": None,
-                "artist": "cyberflex",
-                "title": "LEVEL X",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
         ),
         (
             "Fifty-Third ft. SYH",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "Fifty-Third ft. SYH",
-                "digital_only": False,
-            },
-        ),
-        (
-            "Artist - Track [Digital Bonus]",
-            {
-                "track_alt": None,
-                "artist": "Artist",
-                "title": "Track",
-                "digital_only": True,
-            },
-        ),
-        (
-            "DIGI 11. Track",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "Track",
-                "digital_only": True,
-            },
-        ),
-        (
-            "Digital Life",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "Digital Life",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": None, "title": "Fifty-Third ft. SYH"},
         ),
         (
             "I'll Become Pure N-R-G",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "I'll Become Pure N-R-G",
-                "digital_only": False,
-            },
-        ),
-        (
-            "Messier 33 (Bandcamp Digital Exclusive)",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "Messier 33",
-                "digital_only": True,
-            },
+            {"track_alt": None, "artist": None, "title": "I'll Become Pure N-R-G"},
         ),
         (
             "&$%@#!",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "&$%@#!",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": None, "title": "&$%@#!"},
         ),
         (
             "24 Hours",
-            {
-                "track_alt": None,
-                "artist": None,
-                "title": "24 Hours",
-                "digital_only": False,
-            },
+            {"track_alt": None, "artist": None, "title": "24 Hours"},
+        ),
+        (
+            "Some tune (Someone's Remix)",
+            {"track_alt": None, "artist": None, "title": "Some tune (Someone's Remix)"},
         ),
     ],
 )
 def test_parse_track_name(name, expected):
-    actual = Metaguru.parse_track_name(name)
-    assert actual == expected
+    assert Metaguru.parse_track_name(name) == expected
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_digital_only", "expected_name"),
+    [
+        ("Artist - Track [Digital Bonus]", True, "Artist - Track"),
+        ("DIGI 11. Track", True, "Track"),
+        ("Digital Life", False, None),
+        ("Messier 33 (Bandcamp Digital Exclusive)", True, "Messier 33"),
+        ("33 (bandcamp exclusive)", True, "33"),
+        ("Tune (Someone's Remix) [Digital Bonus]", True, "Tune (Someone's Remix)"),
+    ],
+)
+def test_check_digital_only(name, expected_digital_only, expected_name):
+    expected = dict(digital_only=expected_digital_only)
+    if expected_name:
+        expected.update(name=expected_name)
+    assert Metaguru.check_digital_only(name) == expected
 
 
 @pytest.mark.parametrize(
