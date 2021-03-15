@@ -74,7 +74,7 @@ def urlify(pretty_string: str) -> str:
         else p + "-"
         if not p.endswith("-")
         else p,
-        pretty_string.lower(),
+        pretty_string.lower().replace("'", ""),
         "",
     ).strip("-")
 
@@ -167,11 +167,11 @@ class Metaguru(Helpers):
         match = re.search(pattern, self.html)
         return match.groups()[0] if match else ""
 
-    @cached_property
+    @property
     def album_name(self) -> str:
         return self.meta["name"]
 
-    @cached_property
+    @property
     def clean_album_name(self) -> str:
         args = [self.label, self.catalognum]
         if not self._singleton:
@@ -192,7 +192,7 @@ class Metaguru(Helpers):
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
 
-    @cached_property
+    @property
     def label(self) -> str:
         return self._search(PATTERNS["label"])
 
@@ -209,7 +209,7 @@ class Metaguru(Helpers):
         datestr = self.parse_release_date(self.html)
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
-    @cached_property
+    @property
     def disctitle(self) -> str:
         if self._media and self.media != "Digital Media":
             return self._media.get("name", "")
@@ -241,7 +241,7 @@ class Metaguru(Helpers):
             return MEDIA_MAP[self._media["musicReleaseFormat"]]
         return DEFAULT_MEDIA
 
-    @cached_property
+    @property
     def mediums(self) -> int:
         if self.media != "Vinyl":
             return 1
@@ -261,7 +261,7 @@ class Metaguru(Helpers):
                 descr = ""
         return descr
 
-    @cached_property
+    @property
     def tracks(self) -> List[JSONDict]:
         """`raw_track` example
         "@type": "ListItem",
@@ -369,28 +369,32 @@ class Metaguru(Helpers):
         )
 
     def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs) -> TrackInfo:
+        index = kwargs.pop("index", None) or track.get("position")
         return TrackInfo(
+            **self._common,
             title=track.get("title"),
-            track_id=track.get("url"),
+            track_id=kwargs.pop("track_id", None) or track.get("url"),
             artist=track.get("artist") or self.albumartist,
-            index=track.get("position"),
+            index=index,
             length=self.get_duration(track),
             track_alt=track.get("track_alt"),
             disctitle=self.disctitle or None,
             medium=self.medium,
-            medium_index=track.get("position"),
+            medium_index=index,
             medium_total=medium_total,
-            **self._common,
             **kwargs,
         )
 
     @property
     def singleton(self) -> TrackInfo:
         self._singleton = True
-        kwargs: JSONDict = {}
+        track = self.meta
+        track.update(self.parse_track_name(self.album_name))
+        kwargs = dict(track_id=self.album_id, index=1)
         if NEW_BEETS:
             kwargs.update(**self._common_album, albumartist=self.bandcamp_albumartist)
-        return self._trackinfo(self.tracks.pop(), 1, **kwargs)
+
+        return self._trackinfo(track, 1, **kwargs)
 
     def albuminfo(self, include_all: bool) -> AlbumInfo:
         if self.media == "Digital Media" or include_all:

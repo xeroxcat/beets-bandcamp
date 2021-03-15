@@ -1,3 +1,10 @@
+## [0.7.1] 2021-03-15
+
+### Fixed
+
+- Fixed singleton regression where track list was getting read incorrectly.
+
+
 ## [0.7.0] 2021-03-15
 
 ### Added
