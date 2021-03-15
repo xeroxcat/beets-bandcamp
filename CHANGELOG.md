@@ -5,15 +5,17 @@
 - For those who use `beets >= 1.5.0`, singleton tracks are now enriched with similar metadata
   to albums (depending on whether they are found of course):
 
-  - release date: `year`, `month`, `day`
-  - `label`
-  - `catalognum`
+  - `album`: **Artist - Track** usually
+  - `albumartist`
   - `albumstatus`
-  - `country`
-  - `album`: 'Artist - Track' usually
   - `albumtype`: `single`
+  - `catalognum`
+  - `country`
+  - `label`
+  - `medium`, `medium_index`, `medium_total`
+  - release date: `year`, `month`, `day`
 
-- Album names are now cleaned up. The following are removed from the names:
+- Album names get cleaned up. The following, if found, are removed:
 
   - Artist name (unless it's a singleton track)
   - Label name

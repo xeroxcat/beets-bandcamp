@@ -131,35 +131,35 @@ release is found when importing you can select `enter Id` and paste the Bandcamp
 
 ## Currently supported / returned data
 
-| field              | is extra | singleton track   | album track   | album   |
-| -----------------: | :------: | :---------------: | :-----------: | :-----: |
-| `album`            |          |                   |               | ✔       |
-| `album_id`         |          |                   |               | ✔       |
-| `albumartist`      |          | ✔                 | ✔             | ✔       |
-| `albumstatus`      |          |                   |               | ✔       |
-| `albumtype`        |          |                   |               | ✔       |
-| `artist`           |          | ✔                 | ✔             | ✔       |
-| `artist_id`        |          | ✔                 | ✔             |         |
-| `catalognum`       |          |                   |               | ✔       |
-| + `comments`       | ✔        | ✔                 | ✔             |         |
-| `country`          |          |                   |               | ✔       |
-| `day`              |          |                   |               | ✔       |
-| `disctitle`        |          |                   | ✔             |         |
-| `image`            |          |                   | ✔             | ✔       |
-| `index`            |          |                   | ✔             |         |
-| `label`            |          |                   | ✔             | ✔       |
-| `length`           |          | ✔                 | ✔             |         |
-| `lyrics`           | ✔        |                   | ✔             |         |
-| `media`            |          |                   | ✔             | ✔       |
-| `medium`           |          |                   | ✔             |         |
-| `mediums`          |          |                   |               | ✔       |
-| * `medium_index`   |          |                   | ✔             |         |
-| * `medium_total`   |          |                   | ✔             |         |
-| `month`            |          |                   |               | ✔       |
-| `title`            |          | ✔                 | ✔             |         |
-| `track_alt`        |          | ✔                 | ✔             |         |
-| `va`               |          |                   |               | ✔       |
-| `year`             |          |                   |               | ✔       |
+| field            | is extra | singleton track | album track | album |
+|-----------------:|:--------:|:---------------:|:-----------:|:-----:|
+| `album`          |          | ✔~              |             | ✔     |
+| `album_id`       |          |                 |             | ✔     |
+| `albumartist`    |          | ✔               | ✔           | ✔     |
+| `albumstatus`    |          | ✔~              |             | ✔     |
+| `albumtype`      |          | ✔~              |             | ✔     |
+| `artist`         |          | ✔               | ✔           | ✔     |
+| `artist_id`      |          | ✔               | ✔           |       |
+| `catalognum`     |          | ✔~              |             | ✔     |
+| + `comments`     | ✔        | ✔               | ✔           |       |
+| `country`        |          | ✔~              |             | ✔     |
+| `day`            |          | ✔~              |             | ✔     |
+| `disctitle`      |          | ✔~              | ✔           |       |
+| `image`          |          | ✔               | ✔           | ✔     |
+| `index`          |          | ✔               | ✔           |       |
+| `label`          |          | ✔~              | ✔           | ✔     |
+| `length`         |          | ✔               | ✔           |       |
+| `lyrics`         | ✔        | ✔               | ✔           |       |
+| `media`          |          | ✔~              | ✔           | ✔     |
+| `medium`         |          | ✔~              | ✔           |       |
+| `mediums`        |          |                 |             | ✔     |
+| * `medium_index` |          | ✔~              | ✔           |       |
+| * `medium_total` |          | ✔~              | ✔           |       |
+| `month`          |          | ✔~              |             | ✔     |
+| `title`          |          | ✔               | ✔           |       |
+| `track_alt`      |          | ✔               | ✔           |       |
+| `va`             |          |                 |             | ✔     |
+| `year`           |          | ✔~              |             | ✔     |
 
 **\+** `comments` field gets populated with the release description.
 
@@ -167,3 +167,5 @@ release is found when importing you can select `enter Id` and paste the Bandcamp
   therefore they depend on artists providing some clues in the descriptions of
   their releases. This is only relevant if you have `per_disc_numbering` set to
   `True` in the global beets configuration.
+
+**\~** These singleton fields are available if you use `beets` version `1.5` or higher.
