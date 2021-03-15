@@ -53,8 +53,8 @@
 
 ### Fixed
 
-- Parsing: country/location name parser now takes into account punctuation such as in `St.
-  Louis` - it previously ignored full stops.
+- Parsing: country/location name parser now takes into account punctuation such as in
+  `St. Louis` - it previously ignored full stops.
 
 
 ## [0.6.0] 2021-02-10
