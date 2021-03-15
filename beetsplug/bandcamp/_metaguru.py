@@ -317,23 +317,22 @@ class Metaguru(Helpers):
         return "album"
 
     def _trackinfo(self, track: JSONDict, medium_total: int) -> TrackInfo:
-        data = {
-            "artist": track.get("artist") or self.albumartist,
-            "artist_id": self.artist_id,
-            "data_source": DATA_SOURCE,
-            "data_url": self.album_id,
-            "index": track.get("position"),
-            "length": self.get_duration(track),
-            "media": self.media or DEFAULT_MEDIA,
-            "track_alt": track.get("track_alt"),
-            "disctitle": self.disctitle,
-            "medium": self.medium,
-            "medium_index": track.get("position"),
-            "medium_total": medium_total,
-        }
-        if NEW_BEETS:
-            return TrackInfo(title=track.get("title"), track_id=track.get("url"), **data)
-        return TrackInfo(track.get("title"), track.get("url"), **data)
+        return TrackInfo(
+            title=track.get("title"),
+            track_id=track.get("url"),
+            artist=track.get("artist") or self.albumartist,
+            artist_id=self.artist_id,
+            data_source=DATA_SOURCE,
+            data_url=self.album_id,
+            index=track.get("position"),
+            length=self.get_duration(track),
+            media=self.media or DEFAULT_MEDIA,
+            track_alt=track.get("track_alt"),
+            disctitle=self.disctitle,
+            medium=self.medium,
+            medium_index=track.get("position"),
+            medium_total=medium_total,
+        )
 
     @property
     def singleton(self) -> TrackInfo:
@@ -361,39 +360,25 @@ class Metaguru(Helpers):
         medium_total = len(filtered_tracks)
         _tracks = [self._trackinfo(track, medium_total) for track in filtered_tracks]
         rel_date = self.release_date
-        data = {
-            "va": self.is_va,
-            "year": rel_date.year,
-            "month": rel_date.month,
-            "day": rel_date.day,
-            "label": self.label,
-            "catalognum": self.catalognum,
-            "albumtype": self.albumtype,
-            "data_url": self.album_id,
-            "albumstatus": OFFICIAL if rel_date < date.today() else PROMO,
-            "country": self.country,
-            "media": self.media,
-            "mediums": self.mediums,
-            "data_source": DATA_SOURCE,
-        }
-        if not NEW_BEETS:
-            return AlbumInfo(
-                self.album_name,
-                self.album_id,
-                self.albumartist,
-                self.artist_id,
-                tracks=_tracks,
-                **data,
-            )
         return AlbumInfo(
-            _tracks,
-            **{
-                "album": self.album_name,
-                "artist": self.albumartist,
-                "album_id": self.album_id,
-                "artist_id": self.artist_id,
-            },
-            **data,
+            album=self.clean_album_name,
+            artist=self.albumartist,
+            album_id=self.album_id,
+            artist_id=self.artist_id,
+            va=self.is_va,
+            year=rel_date.year,
+            month=rel_date.month,
+            day=rel_date.day,
+            label=self.label,
+            catalognum=self.catalognum,
+            albumtype=self.albumtype,
+            data_url=self.album_id,
+            albumstatus=OFFICIAL if rel_date < date.today() else PROMO,
+            country=self.country,
+            media=self.media,
+            mediums=self.mediums,
+            data_source=DATA_SOURCE,
+            tracks=_tracks,
         )
 
     def album(self, include_all: bool) -> AlbumInfo:

@@ -1,9 +1,16 @@
 """Module for tests related to parsing."""
 import pytest
 
-from beetsplug.bandcamp._metaguru import Metaguru, urlify
+from beetsplug.bandcamp._metaguru import NEW_BEETS, Metaguru, urlify
 
 pytestmark = pytest.mark.parsing
+
+
+def check(actual, expected) -> None:
+    if NEW_BEETS:
+        assert actual == expected
+    else:
+        assert vars(actual) == vars(expected)
 
 
 @pytest.mark.parametrize(
@@ -248,7 +255,7 @@ def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
 
-    assert vars(guru.singleton) == vars(expected.singleton)
+    check(guru.singleton, expected.singleton)
 
 
 def test_parse_album_or_comp(multitracks):
@@ -259,17 +266,17 @@ def test_parse_album_or_comp(multitracks):
     actual_album = guru.album(include_all)
     disctitle = actual_album.tracks[0].disctitle
     assert disctitle == expected_release.disctitle
-    expected = expected_release.albuminfo
+    expected_album = expected_release.albuminfo
 
     assert hasattr(actual_album, "tracks")
     assert len(actual_album.tracks) == expected_release.track_count
 
-    expected.tracks.sort(key=lambda t: t.index)
+    expected_album.tracks.sort(key=lambda t: t.index)
     actual_album.tracks.sort(key=lambda t: t.index)
 
-    for actual_track, expected_track in zip(actual_album.tracks, expected.tracks):
-        assert vars(actual_track) == vars(expected_track)
-    actual_album.tracks = None
-    expected.tracks = None
+    for actual_track, expected_track in zip(actual_album.tracks, expected_album.tracks):
+        check(actual_track, expected_track)
 
-    assert vars(actual_album) == vars(expected)
+    actual_album.tracks = None
+    expected_album.tracks = None
+    check(actual_album, expected_album)

@@ -2,17 +2,15 @@
 import codecs
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Dict, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import pytest
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 
 from beetsplug.bandcamp._metaguru import DATA_SOURCE, NEW_BEETS, OFFICIAL
 
-JSONDict = Dict[str, Any]
 
-
-@dataclass
+@dataclass  # pylint: disable=too-many-instance-attributes
 class ReleaseInfo:
     image: str
     album_id: str
@@ -32,8 +30,8 @@ class ReleaseInfo:
         track_url = f"{self.artist_id}/track/{track_id}"
 
         return TrackInfo(
-            title,
-            track_url,
+            title=title,
+            track_id=track_url,
             index=index,
             length=length,
             data_url=self.album_id,
@@ -62,7 +60,11 @@ class ReleaseInfo:
         )
 
     def set_albuminfo(self, tracks: Sequence[Tuple], **kwargs) -> None:
-        data = dict(
+        self.albuminfo = AlbumInfo(
+            album=kwargs["album"],
+            album_id=self.album_id,
+            artist=kwargs["albumartist"],
+            artist_id=self.artist_id,
             data_url=self.album_id,
             year=kwargs["release_date"].year,
             month=kwargs["release_date"].month,
@@ -76,25 +78,8 @@ class ReleaseInfo:
             albumstatus=OFFICIAL,
             media=self.media,
             data_source=DATA_SOURCE,
+            tracks=[self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)],
         )
-        tracks = [self.trackinfo(idx, track) for idx, track in enumerate(tracks, 1)]
-        if not NEW_BEETS:
-            self.albuminfo = AlbumInfo(
-                kwargs["album"],
-                self.album_id,
-                kwargs["albumartist"],
-                self.artist_id,
-                tracks=tracks,
-                **data,
-            )
-        else:
-            data.update(
-                album=kwargs["album"],
-                album_id=self.album_id,
-                albumartist=kwargs["albumartist"],
-                artist_id=self.artist_id,
-            )
-            self.albuminfo = AlbumInfo(tracks, **data)
 
 
 @pytest.fixture
