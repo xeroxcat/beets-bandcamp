@@ -129,6 +129,22 @@ class Helpers:
                 return floor(item.get("value", 0))
         return 0
 
+    @staticmethod
+    def clean_up_album_name(name: str, *args) -> str:
+        excl = "Various Artists|limited edition"
+
+        # remove special chars
+        special = r"[*.+\\]"
+        extras = "|".join(filter(truth, map(lambda x: re.sub(special, "", x), args)))
+
+        excl = rf"({excl}|{extras})" if extras else rf"({excl})"
+
+        pat = re.compile(
+            rf" EP|({excl}\s[|/]+\s?)|[\[(]{excl}[])]|(\s-\s){excl}|{excl}(\s?-\s)",
+            flags=re.IGNORECASE,
+        )
+        return re.sub(pat, "", name).strip()
+
 
 class Metaguru(Helpers):
     html: str
@@ -151,10 +167,16 @@ class Metaguru(Helpers):
         match = re.search(pattern, self.html)
         return match.groups()[0] if match else ""
 
-    @property
+    @cached_property
     def album_name(self) -> str:
-        # TODO: Cleanup catalogue, etc
         return self.meta["name"]
+
+    @cached_property
+    def clean_album_name(self) -> str:
+        args = [self.label, self.catalognum]
+        if not self._singleton:
+            args.append(self.albumartist)
+        return self.clean_up_album_name(self.album_name, *args)
 
     @property
     def album_id(self) -> str:
@@ -170,7 +192,7 @@ class Metaguru(Helpers):
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
 
-    @property
+    @cached_property
     def label(self) -> str:
         return self._search(PATTERNS["label"])
 

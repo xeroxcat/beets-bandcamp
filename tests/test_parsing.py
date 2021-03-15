@@ -181,6 +181,30 @@ def test_parse_catalognum(album, expected):
     assert Metaguru.parse_catalognum(album, "") == expected
 
 
+@pytest.mark.parametrize(
+    ("album", "extras", "expected"),
+    [
+        ("Album - Various Artists", [], "Album"),
+        ("Various Artists - Album", [], "Album"),
+        ("Various Artists Album", [], "Various Artists Album"),
+        ("Album EP", [], "Album"),
+        ("[Label] Album EP", ["Label"], "Album"),
+        ("Artist - Album EP", ["Artist"], "Album"),
+        ("Label | Album", ["Label"], "Album"),
+        (
+            "Tweaker-229 - Tweaker-229 [PRH-002]",
+            ["PRH-002", "Tweaker-229"],
+            "Tweaker-229",
+        ),
+        ("Album (limited edition)", [], "Album"),
+        ("Album - VARIOUS ARTISTS", [], "Album"),
+        ("Drepa Mann", [], "Drepa Mann"),
+    ],
+)
+def test_clean_up_album_name(album, extras, expected):
+    assert Metaguru.clean_up_album_name(album, *extras) == expected
+
+
 def test_parse_single_track_release(single_track_release):
     html, expected = single_track_release
     guru = Metaguru(html)
