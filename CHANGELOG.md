@@ -10,6 +10,8 @@
 - Parsing:
   * Token `feat.` is now recognised as a valid member of the `artist` field.
 
+- Updated supported python version range in the package.
+
 
 ## [0.7.1] 2021-03-15
 
