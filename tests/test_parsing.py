@@ -1,4 +1,6 @@
 """Module for tests related to parsing."""
+import json
+
 import pytest
 
 from beetsplug.bandcamp._metaguru import NEW_BEETS, Metaguru, urlify
@@ -11,6 +13,39 @@ def check(actual, expected) -> None:
         assert actual == expected
     else:
         assert vars(actual) == vars(expected)
+
+
+@pytest.mark.parametrize(
+    ("meta", "expected"),
+    [
+        ({}, ""),
+        ({"description": "hello"}, "hello"),
+        ({"description": "Includes high-quality download"}, ""),
+        (
+            {
+                "description": "",
+                "albumRelease": [
+                    {"musicReleaseFormat": "VinylFormat", "description": "sick vinyl"}
+                ],
+            },
+            "sick vinyl",
+        ),
+        (
+            {
+                "description": "sickest vinyl",
+                "albumRelease": [
+                    {"musicReleaseFormat": "VinylFormat", "description": "sick vinyl"}
+                ],
+            },
+            "sickest vinyl",
+        ),
+    ],
+)
+def test_description(meta, expected):
+    meta.update(datePublished="doesntmatter")
+    guru = Metaguru(json.dumps(meta), media="Vinyl")
+    guru._media = meta.get("albumRelease", [{}])[0]
+    assert guru.description == expected, vars(guru)
 
 
 @pytest.mark.parametrize(

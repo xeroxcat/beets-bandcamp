@@ -7,7 +7,7 @@
   - `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
     `/track/<name>` output when the track is part of an album.
   - `url` field has disappeared from track objects - using `@id` instead.
-  - `country` is now part of the JSON - we fetch it from there
+  - `country` and `label` fields are now found in the JSON data and thus we make use of it
 
 - Parsing / logic:
 
@@ -33,8 +33,8 @@
 ### Added
 
 - Added a test based on parsing _the JSON output_ directly without having to parse the
-  entire HTML. Bandcamp have been moving key information there, so hopefully at some
-  point we will only have to deal with JSON without html.
+  entire HTML. Bandcamp have been moving away from HTML luckily, so let's hope the trend
+  continues.
 - Added a tiny cmd-line tool `url2json` which simply outputs either a compacted or a
   human version of the JSON data that is found for the given bandcamp URL.
 

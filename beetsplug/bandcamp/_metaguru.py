@@ -44,7 +44,6 @@ PATTERNS: Dict[str, Pattern] = {
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_excl": re.compile(r"(?i:vol(ume)?|artists)|202[01]|(^|\s)C\d\d|\d+/\d+"),
     "digital": re.compile(rf"^DIGI (\d+\.\s?)?|(?i:{_exclusive})"),
-    "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
@@ -143,11 +142,12 @@ class Metaguru(Helpers):
     preferred_media: str
     meta: JSONDict
 
+    _media: Dict[str, str]
     _all_medias = {DEFAULT_MEDIA}  # type: Set[str]
-    _media = None  # type: Dict[str, str]
     _singleton = False  # type: bool
 
     def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
+        self._media = {}
         self.html = html
         self.preferred_media = media
 
@@ -156,13 +156,13 @@ class Metaguru(Helpers):
         if match:
             self.meta = json.loads(match.group())
 
-    def _search(self, pattern: Pattern[str]) -> str:
-        match = re.search(pattern, self.html)
-        return match.groups()[0] if match else ""
-
     @cached_property
     def album_name(self) -> str:
         return self.meta["name"]
+
+    @cached_property
+    def label(self) -> str:
+        return self.meta["publisher"]["name"]
 
     @property
     def clean_album_name(self) -> str:
@@ -188,10 +188,6 @@ class Metaguru(Helpers):
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
 
-    @cached_property
-    def label(self) -> str:
-        return self._search(PATTERNS["label"])
-
     @property
     def lyrics(self) -> Optional[str]:
         # TODO: Need to test
@@ -206,17 +202,25 @@ class Metaguru(Helpers):
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
     @cached_property
+    def media(self) -> str:
+        """Return the human-readable version of the media format."""
+        return MEDIA_MAP.get(self._media.get("musicReleaseFormat", ""), DEFAULT_MEDIA)
+
+    @cached_property
     def disctitle(self) -> str:
-        if self._media and self.media != "Digital Media":
-            return self._media.get("name", "")
-        return ""
+        """Digital media does not have discs unfortunately."""
+        return "" if self.media == DEFAULT_MEDIA else self._media.get("name", "")
+
+    @property
+    def mediums(self) -> int:
+        return self.get_vinyl_count(self.disctitle) if self.media == "Vinyl" else 1
 
     @cached_property
     def catalognum(self) -> str:
         # TODO: Can also search the description for more info, e.g. catalog: catalognum
         return self.parse_catalognum(self.album_name, self.disctitle)
 
-    @property
+    @cached_property
     def country(self) -> str:
         try:
             loc = self.meta["publisher"]["foundingLocation"]["name"].rpartition(", ")[-1]
@@ -229,26 +233,18 @@ class Metaguru(Helpers):
         except (KeyError, ValueError, LookupError):
             return WORLDWIDE
 
-    @cached_property
-    def media(self) -> str:
-        if self._media:
-            return MEDIA_MAP[self._media["musicReleaseFormat"]]
-        return DEFAULT_MEDIA
-
-    @property
-    def mediums(self) -> int:
-        if self.media != "Vinyl":
-            return 1
-        return self.get_vinyl_count(self.disctitle)
-
     @property
     def description(self) -> str:
-        descr = self.meta.get("description", "")
-        if not descr and self._media:
-            descr = self._media.get("description", "")
-            if descr.startswith("Includes high-quality dow"):
-                descr = ""
-        return descr
+        """Return album or media description of one of them exists and if it does not
+        start with a generic message.
+        """
+        return next(
+            filter(
+                lambda d: d and not d.startswith("Includes high-quality dow"),
+                map(lambda m: m.get("description", ""), (self.meta, self._media)),
+            ),
+            "",
+        )
 
     @cached_property
     def tracks(self) -> List[JSONDict]:
@@ -340,7 +336,7 @@ class Metaguru(Helpers):
     def _common(self) -> JSONDict:
         return dict(
             data_source=DATA_SOURCE,
-            media=self.media or DEFAULT_MEDIA,
+            media=self.media,
             data_url=self.album_id,
             artist_id=self.artist_id,
         )
