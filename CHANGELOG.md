@@ -8,6 +8,8 @@
     `/track/<name>` output when the track is part of an album.
   - `url` field has disappeared from track objects - using `@id` instead.
   - `country` and `label` fields are now found in the JSON data and thus we make use of it
+  - Updated and truncated test html files since we now only need to see the beginning of
+    the document.
 
 - Parsing / logic:
 
