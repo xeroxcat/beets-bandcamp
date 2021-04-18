@@ -292,6 +292,53 @@ def compilation() -> Tuple[str, ReleaseInfo]:
     return codecs.open(test_html_file).read(), info
 
 
+def json_album() -> Tuple[str, ReleaseInfo]:
+    """An unusual album for testing some edge cases."""
+    json_data_file = "tests/ksointsu.json"
+    info = ReleaseInfo(
+        image="https://f4.bcbits.com/img/0021724693_10.jpg",
+        artist_id="https://psykovsky.bandcamp.com",
+        album_id="https://psykovsky.bandcamp.com/album/ksolntsu",
+        track_count=15,
+        media="Digital Media",
+        disctitle=None,
+    )
+    # fmt: off
+    tracks = [
+        ("ela-na-pame", "Psykovsky & Orestis", "Ela Na Pame", 518, None),
+        ("stone-sea", "Psykovsky & Luuli", "Stone Sea", 673, None),
+        ("so-we-sailed-till-we-found", "Psykovsky & Spiral", "So We Sailed Till We Found", 454, None),  # noqa
+        ("doors-of-perception", "Psykovsky & Kasatka", "Doors Of Perception", 473, None),  # noqa
+        ("variant-on-the-right", "Psykovsky & Spiral & Seeasound", "Variant On The Right", 736, None),  # noqa
+        ("call-of-beauty", "Psykovsky & Friends", "Call Of Beauty", 769, None),
+        ("many-many-krishnas", "Psykovsky & Orestis & Jobaba", "Many Many Krishnas", 729, None),  # noqa
+        ("prem-i-um", "Psykovsky & Kashyyyk & Arcek", "Prem I Um", 409, None),
+        ("now-here-nowhere", "Psykovsky & Arcek", "Now Here Nowhere", 557, None),
+        ("holy-black-little-lark", "Psykovsky & Maleficium & Seeasound", "Holy Black / Little Lark", 1087, None),  # noqa
+        ("worlds-of-wisdom", "Psykovsky & Friends", "Worlds Of Wisdom", 408, None),
+        ("pc-transmission", "Psykovsky & Friends", "PC Transmission", 561, None),
+        ("rs-lightmusic", "Psykovsky & Friends", "RS Lightmusic", 411, None),
+        ("ksolntsu", "Psykovsky & Quip Tone Beatz & Flish", "Ksolntsu", 555, None),
+        ("dadme-albricios-hijos-deva", "Birds Of Praise", "Dadme albricios hijos d'Eva", 623, None),  # noqa
+    ]
+    # fmt: on
+    info.set_albuminfo(
+        tracks,
+        album="Ksolntsu",
+        albumartist="Various Artists",
+        albumtype="compilation",
+        catalognum="",
+        label="Psykovsky",
+        release_date=date(2015, 2, 12),
+        va=True,
+        country="NU",
+        mediums=1,
+    )
+    dummy_html = "released 12 February 2015"
+    data = open(json_data_file).read()
+    return "\n".join([data, dummy_html]), info
+
+
 def ep() -> Tuple[str, ReleaseInfo]:
     """An EP with various artists."""
     test_html_file = "tests/ep.html"
@@ -353,6 +400,6 @@ def ep_album() -> Tuple[str, ReleaseInfo]:
     return ep()
 
 
-@pytest.fixture(params=[album, album_with_track_alt, compilation, ep])
+@pytest.fixture(params=[album, album_with_track_alt, compilation, ep, json_album])
 def multitracks(request) -> Tuple[str, ReleaseInfo]:
     return request.param()

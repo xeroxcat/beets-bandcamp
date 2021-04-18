@@ -45,7 +45,7 @@ tests_no_zope = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>
 name = "beets"
 version = "1.5.0"
 description = "music tagger and library organizer"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -128,7 +128,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 name = "confuse"
 version = "1.4.0"
 description = "Painless YAML configuration."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4"
 
@@ -251,7 +251,7 @@ colors = ["colorama (>=0.4.3,<0.5.0)"]
 name = "jellyfish"
 version = "0.8.2"
 description = "a library for doing approximate and phonetic matching of strings."
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">3.4"
 
@@ -275,7 +275,7 @@ python-versions = "*"
 name = "mediafile"
 version = "0.6.0"
 description = "Handles low-level interfacing for files' tags. Wraps Mutagen to"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -290,7 +290,7 @@ test = ["tox"]
 name = "munkres"
 version = "1.1.4"
 description = "Munkres (Hungarian) algorithm for the Assignment Problem"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -298,7 +298,7 @@ python-versions = "*"
 name = "musicbrainzngs"
 version = "0.7.1"
 description = "Python bindings for the MusicBrainz NGS and the Cover Art Archive webservices"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -306,7 +306,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 name = "mutagen"
 version = "1.45.1"
 description = "read and write audio tags for many formats"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.5, <4"
 
@@ -458,7 +458,7 @@ testing = ["fields", "hunter", "process-tests (2.0.2)", "six", "pytest-xdist", "
 name = "pyyaml"
 version = "5.4.1"
 description = "YAML parser and emitter for Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
 
@@ -484,7 +484,7 @@ socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7)", "win-inet-pton"]
 name = "six"
 version = "1.15.0"
 description = "Python 2 and 3 compatibility utilities"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 
@@ -539,7 +539,7 @@ python-versions = "*"
 name = "unidecode"
 version = "1.2.0"
 description = "ASCII transliterations of Unicode text"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -599,7 +599,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6,<3.10"
-content-hash = "4ba5ac5df1d42c67e4d37e3a710d63a6106406e83507096c67ec096c8a7e81a7"
+content-hash = "e904e28d448e35b7d4a8060a2bc9d63b2731bdbba16fc6280381b27da2d5965a"
 
 [metadata.files]
 appdirs = [

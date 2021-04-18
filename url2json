@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# url2json [-h] <bandcamp-url>
+#
+#       Parse given bandcamp url and print the resulting json.
+#       Default output is a single-line JSON string used in tests.
+#       (It was used for obtaining test cases).
+#       Ensure you have curl, grep and jq on your system.
+#
+# url2json https://hello.bandcamp.com/album/hi > ./tests/testcase.json
+#
+#       Add flag -h (human) to have it newlined and indented.
+#
+# url2json -h https://hello.bandcamp.com/album/hi | less
+#
+#       Note: Some lengthy fields are removed since they aren't currently parsed.
+#             Feel free to adjust.
+#
+
+if [ -z "$1" ]; then
+    sed -n '2,$s/^#/ /p' "$0"
+    exit 0
+else
+    jqflag=--compact-output
+    [ "$1" = -h ] && jqflag= && shift
+
+    curl -s "$1" | grep datePubl |
+        jq $jqflag 'del(.sponsor, .albumRelease[0].offers)'
+fi

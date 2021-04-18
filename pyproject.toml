@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beetcamp"
-version = "0.7.2-alpha.0"
+version = "0.7.2-alpha.3"
 description = "Bandcamp autotagger source for beets (http://beets.io)."
 authors = ["Šarūnas Nejus <snejus@pm.me>"]
 readme = "README.md"
@@ -14,18 +14,17 @@ include = ["LICENSE", "README.md"]
 [tool.poetry.dependencies]
 python = ">=3.6,<3.10"
 
-beets = ">=1.4.6"
 requests = "*"
 cached-property = "^1.5.2"
 pycountry = "^20.7.3"
 
 [tool.poetry.dev-dependencies]
 beets = { git = "https://github.com/beetbox/beets" }
-dataclasses = "*"
-tox = "^3.21.1"
+dataclasses = { version = "*", python = "<3.7" }
+tox = ">=3.21.1"
 flake8 = ">=3.8.4"
 mypy = ">=0.790"
-pylint = "^2.7.4"
+pylint = ">=2.7.4"
 pytest = ">=6.2"
 pytest-cov = ">=2.10.1"
 

@@ -1,30 +1,47 @@
-## [0.7.2] 2021-04-18
+## [0.7.2] 2021-04-xx - WIP
 
 ### Fixed
 
 - Responded to bandcamp html updates:
-  * `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
+
+  - `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
     `/track/<name>` output when the track is part of an album.
-  * `url` field has disappeared from track objects - using `@id` instead.
+  - `url` field has disappeared from track objects - using `@id` instead.
 
-- Parsing:
-  * Token `feat.` is now recognised as a valid member of the `artist` field.
+- Parsing / logic:
 
-- Updated supported python version range in the package.
+  - Token `feat.` is now recognised as a valid member of the `artist` field.
+  - Updated `albumtype` logic: in some `compilation` cases the track artist is missing -
+    until now it would sometimes get set to _Various Artists_ - instead it now defaults to
+    the original `albumartist`.
+
+### Updated
+
+- Package:
+
+  - Moved `beets` from main to dev dependencies.
+  - Updated supported python versions range (3.6.x-3.9.x)
+  - Added pylint.
+  - Removed dependency on `packaging` - using `pkg_resources` instead.
+
+- Internal:
+
+  - Reintroduced `@cached_property` across most of the fields having found how often certain
+    ones get called.
 
 ### Added
-- Pylint
 
-### Removed
-- Removed dependency on `packaging` - using `pkg_resources` instead.
-
+- Added a test based on parsing _the JSON output_ directly without having to parse the
+  entire HTML. Bandcamp have been moving key information there, so hopefully at some
+  point we will only have to deal with JSON without html.
+- Added a tiny cmd-line tool `url2json` which simply outputs either a compacted or a
+  human version of the JSON data that is found for the given bandcamp URL.
 
 ## [0.7.1] 2021-03-15
 
 ### Fixed
 
 - Fixed singleton regression where track list was getting read incorrectly.
-
 
 ## [0.7.0] 2021-03-15
 
@@ -83,7 +100,6 @@
 
 - Parsing: country/location name parser now takes into account punctuation such as in
   `St. Louis` - it previously ignored full stops.
-
 
 ## [0.6.0] 2021-02-10
 

@@ -161,7 +161,7 @@ class Metaguru(Helpers):
         match = re.search(pattern, self.html)
         return match.groups()[0] if match else ""
 
-    @property
+    @cached_property
     def album_name(self) -> str:
         return self.meta["name"]
 
@@ -172,11 +172,11 @@ class Metaguru(Helpers):
             args.add(self.albumartist)
         return self.clean_up_album_name(self.album_name, *args)
 
-    @property
+    @cached_property
     def album_id(self) -> str:
         return self.meta["@id"]
 
-    @property
+    @cached_property
     def artist_id(self) -> str:
         try:
             return self.meta["byArtist"]["@id"]
@@ -189,7 +189,7 @@ class Metaguru(Helpers):
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
 
-    @property
+    @cached_property
     def label(self) -> str:
         return self._search(PATTERNS["label"])
 
@@ -201,18 +201,18 @@ class Metaguru(Helpers):
             return None
         return "\n".join(json.loads(m).get("text") for m in matches)
 
-    @property
+    @cached_property
     def release_date(self) -> date:
         datestr = self.parse_release_date(self.html)
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
-    @property
+    @cached_property
     def disctitle(self) -> str:
         if self._media and self.media != "Digital Media":
             return self._media.get("name", "")
         return ""
 
-    @property
+    @cached_property
     def catalognum(self) -> str:
         # TODO: Can also search the description for more info, e.g. catalog: catalognum
         return self.parse_catalognum(self.album_name, self.disctitle)
@@ -232,7 +232,7 @@ class Metaguru(Helpers):
         except LookupError:
             return DEFAULT_COUNTRY
 
-    @property
+    @cached_property
     def media(self) -> str:
         if self._media:
             return MEDIA_MAP[self._media["musicReleaseFormat"]]
@@ -245,11 +245,6 @@ class Metaguru(Helpers):
         return self.get_vinyl_count(self.disctitle)
 
     @property
-    def medium(self) -> int:
-        """We can't tell the number of current disc for a multi-disc release."""
-        return 1
-
-    @property
     def description(self) -> str:
         descr = self.meta.get("description", "")
         if not descr and self._media:
@@ -258,7 +253,7 @@ class Metaguru(Helpers):
                 descr = ""
         return descr
 
-    @property
+    @cached_property
     def tracks(self) -> List[JSONDict]:
         """Tracks JSON structure as of mid April, 2021.
         "itemListElement": [{
@@ -298,13 +293,11 @@ class Metaguru(Helpers):
         return tracks
 
     @cached_property
-    def is_single_artist(self) -> bool:
-        unique_artists = {
-            re.sub(r" f(ea)?t\. .*", "", t["artist"]) if t["artist"] else None
-            for t in self.tracks
-        }
-        unique_artists.discard(None)
-        return len(unique_artists) <= 1
+    def track_artists(self) -> Set[str]:
+        ignore = r" f(ea)?t\. .*"
+        artists = set(re.sub(ignore, "", t.get("artist") or "") for t in self.tracks)
+        artists.discard("")
+        return artists
 
     @property
     def is_lp(self) -> bool:
@@ -312,28 +305,28 @@ class Metaguru(Helpers):
 
     @cached_property
     def is_ep(self) -> bool:
-        return (
-            "EP" in self.album_name
-            or "EP" in self.disctitle
-            or (self._all_medias != {DEFAULT_MEDIA} and len(self.tracks) < 5)
+        return ("EP" in self.album_name or "EP" in self.disctitle) or (
+            self._all_medias != {DEFAULT_MEDIA} and len(self.tracks) < 5
         )
 
     @cached_property
     def is_va(self) -> bool:
         return "various artists" in self.album_name.lower() or (
-            not self.is_single_artist and not self.is_ep
+            len(self.track_artists) > 1 and len(self.tracks) > 4
         )
 
-    @property
+    @cached_property
     def bandcamp_albumartist(self) -> str:
+        """Return original album artist - most often the label name."""
         return self.meta["byArtist"]["name"]
 
-    @property
+    @cached_property
     def albumartist(self) -> str:
+        """Handle various artists and albums that have a single artist."""
         if self.is_va:
             return "Various Artists"
-        if self.is_single_artist and self.tracks and self.tracks[0].get("artist"):
-            return self.tracks[0]["artist"]
+        if len(self.track_artists) == 1:
+            return next(iter(self.track_artists))
         return self.bandcamp_albumartist
 
     @property
@@ -375,12 +368,12 @@ class Metaguru(Helpers):
             **self._common,
             title=track.get("title"),
             track_id=kwargs.pop("track_id", None) or track.get("@id"),
-            artist=track.get("artist") or self.albumartist,
+            artist=track.get("artist") or self.bandcamp_albumartist,
             index=index,
             length=self.get_duration(track),
             track_alt=track.get("track_alt"),
             disctitle=self.disctitle or None,
-            medium=self.medium,
+            medium=1,
             medium_index=index,
             medium_total=medium_total,
             **kwargs,

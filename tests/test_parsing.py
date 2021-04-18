@@ -54,62 +54,24 @@ def test_parse_release_date(string, expected):
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        (
-            "Title",
-            {"track_alt": None, "artist": None, "title": "Title"},
-        ),
-        (
-            "Artist - Title",
-            {"track_alt": None, "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1. Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1.- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "1.Artist - Title",
-            {"track_alt": "1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "DJ BEVERLY HILL$ - Raw Steeze",
-            {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
-        ),
-        (
-            "LI$INGLE010 - cyberflex - LEVEL X",
-            {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
-        ),
-        (
-            "Fifty-Third ft. SYH",
-            {"track_alt": None, "artist": None, "title": "Fifty-Third ft. SYH"},
-        ),
-        (
-            "I'll Become Pure N-R-G",
-            {"track_alt": None, "artist": None, "title": "I'll Become Pure N-R-G"},
-        ),
-        (
-            "&$%@#!",
-            {"track_alt": None, "artist": None, "title": "&$%@#!"},
-        ),
-        (
-            "24 Hours",
-            {"track_alt": None, "artist": None, "title": "24 Hours"},
-        ),
-        (
-            "Some tune (Someone's Remix)",
-            {"track_alt": None, "artist": None, "title": "Some tune (Someone's Remix)"},
-        ),
+        ("Title", (None, None, "Title")),
+        ("Artist - Title", (None, "Artist", "Title")),
+        ("A1. Artist - Title", ("A1", "Artist", "Title")),
+        ("A1- Artist - Title", ("A1", "Artist", "Title")),
+        ("A1.- Artist - Title", ("A1", "Artist", "Title")),
+        ("1.Artist - Title", ("1", "Artist", "Title")),
+        ("DJ BEVERLY HILL$ - Raw Steeze", (None, "DJ BEVERLY HILL$", "Raw Steeze")),
+        ("LI$INGLE010 - cyberflex - LEVEL X", (None, "cyberflex", "LEVEL X")),
+        ("Fifty-Third ft. SYH", (None, None, "Fifty-Third ft. SYH")),
+        ("I'll Become Pure N-R-G", (None, None, "I'll Become Pure N-R-G")),
+        ("&$%@#!", (None, None, "&$%@#!")),
+        ("24 Hours", (None, None, "24 Hours")),
+        ("Some tune (Someone's Remix)", (None, None, "Some tune (Someone's Remix)")),
     ],
 )
 def test_parse_track_name(name, expected):
-    assert Metaguru.parse_track_name(name) == expected
+    parts = ("track_alt", "artist", "title")
+    assert Metaguru.parse_track_name(name) == dict(zip(parts, expected))
 
 
 @pytest.mark.parametrize(
