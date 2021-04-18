@@ -12,6 +12,12 @@
 
 - Updated supported python version range in the package.
 
+### Added
+- Pylint
+
+### Removed
+- Removed dependency on `packaging` - using `pkg_resources` instead.
+
 
 ## [0.7.1] 2021-03-15
 

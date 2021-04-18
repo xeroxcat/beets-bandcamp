@@ -8,16 +8,12 @@ from string import ascii_lowercase, digits
 from typing import Any, Dict, List, Optional, Pattern, Set, Union
 from unicodedata import normalize
 
-from beets import __version__ as beets_version
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from cached_property import cached_property
-from packaging.version import parse
+from pkg_resources import get_distribution, parse_version
 from pycountry import countries, subdivisions
 
-NEW_BEETS = True
-if parse(beets_version) < parse("1.5.0"):
-    NEW_BEETS = False
-
+NEW_BEETS = get_distribution("beets").parsed_version >= parse_version("1.5.0")
 
 JSONDict = Dict[str, Any]
 
