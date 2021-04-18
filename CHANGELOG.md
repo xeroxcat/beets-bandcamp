@@ -7,6 +7,7 @@
   - `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
     `/track/<name>` output when the track is part of an album.
   - `url` field has disappeared from track objects - using `@id` instead.
+  - `country` is now part of the JSON - we fetch it from there
 
 - Parsing / logic:
 

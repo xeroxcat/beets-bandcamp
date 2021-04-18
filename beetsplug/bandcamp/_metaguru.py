@@ -26,7 +26,7 @@ COUNTRY_OVERRIDES = {
 }
 DATE_FORMAT = "%d %B %Y"
 DATA_SOURCE = "bandcamp"
-DEFAULT_COUNTRY = "XW"
+WORLDWIDE = "XW"
 DEFAULT_MEDIA = "Digital Media"
 MEDIA_MAP = {
     "VinylFormat": "Vinyl",
@@ -43,7 +43,6 @@ PATTERNS: Dict[str, Pattern] = {
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_excl": re.compile(r"(?i:vol(ume)?|artists)|202[01]|(^|\s)C\d\d|\d+/\d+"),
-    "country": re.compile(r'location\ssecondaryText">(?:[\w\s.]*, )?([\w\s,]+){1,4}'),
     "digital": re.compile(rf"^DIGI (\d+\.\s?)?|(?i:{_exclusive})"),
     "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
@@ -219,18 +218,16 @@ class Metaguru(Helpers):
 
     @property
     def country(self) -> str:
-        country = self._search(PATTERNS["country"])
-        ascii_name = normalize("NFKD", country).encode("ascii", "ignore").decode()
         try:
+            loc = self.meta["publisher"]["foundingLocation"]["name"].rpartition(", ")[-1]
+            name = normalize("NFKD", loc).encode("ascii", "ignore").decode()
             return (
-                COUNTRY_OVERRIDES.get(country)
-                or getattr(
-                    countries.get(name=ascii_name, default=object), "alpha_2", None
-                )
-                or subdivisions.lookup(ascii_name).country_code
+                COUNTRY_OVERRIDES.get(name)
+                or getattr(countries.get(name=name, default=object), "alpha_2", None)
+                or subdivisions.lookup(name).country_code
             )
-        except LookupError:
-            return DEFAULT_COUNTRY
+        except (KeyError, ValueError, LookupError):
+            return WORLDWIDE
 
     @cached_property
     def media(self) -> str:

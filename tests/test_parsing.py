@@ -112,9 +112,9 @@ def test_check_digital_only(name, expected_digital_only, expected_name):
     ],
 )
 def test_parse_country(name, expected):
-    line = f'<span class="location secondaryText">{name}</span>'
-    actual = Metaguru(line).country
-    assert actual == expected
+    guru = Metaguru("")
+    guru.meta = {"publisher": {"foundingLocation": {"name": name}}}
+    assert guru.country == expected
 
 
 @pytest.mark.parametrize(
