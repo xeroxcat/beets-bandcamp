@@ -4,9 +4,8 @@ import re
 from datetime import date, datetime
 from functools import reduce
 from math import floor
-from operator import truth
 from string import ascii_lowercase, digits
-from typing import Any, Dict, List, Optional, Pattern, Union
+from typing import Any, Dict, List, Optional, Pattern, Set, Union
 from unicodedata import normalize
 
 from beets import __version__ as beets_version
@@ -130,13 +129,11 @@ class Helpers:
         return 0
 
     @staticmethod
-    def clean_up_album_name(name: str, *args) -> str:
+    def clean_up_album_name(name: str, *args: str) -> str:
         excl = "Various Artists|limited edition"
 
-        # remove special chars
-        special = r"[*.+\\]"
-        extras = "|".join(filter(truth, map(lambda x: re.sub(special, "", x), args)))
-
+        # handle special chars
+        extras = "|".join(map(re.escape, args))
         excl = rf"({excl}|{extras})" if extras else rf"({excl})"
 
         pat = re.compile(
@@ -151,8 +148,9 @@ class Metaguru(Helpers):
     preferred_media: str
     meta: JSONDict
 
-    _media = None  # type: Optional[Dict[str, str]]
-    _singleton = False
+    _all_medias = {DEFAULT_MEDIA}  # type: Set[str]
+    _media = None  # type: Dict[str, str]
+    _singleton = False  # type: bool
 
     def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
         self.html = html
@@ -173,9 +171,9 @@ class Metaguru(Helpers):
 
     @property
     def clean_album_name(self) -> str:
-        args = [self.label, self.catalognum]
+        args = {self.label, self.catalognum}.difference({""})
         if not self._singleton:
-            args.append(self.albumartist)
+            args.add(self.albumartist)
         return self.clean_up_album_name(self.album_name, *args)
 
     @property
@@ -184,7 +182,10 @@ class Metaguru(Helpers):
 
     @property
     def artist_id(self) -> str:
-        return self.meta["byArtist"]["@id"]
+        try:
+            return self.meta["byArtist"]["@id"]
+        except KeyError:
+            return self.meta["publisher"]["@id"]
 
     @property
     def image(self) -> str:
@@ -263,23 +264,29 @@ class Metaguru(Helpers):
 
     @property
     def tracks(self) -> List[JSONDict]:
-        """`raw_track` example
-        "@type": "ListItem",
-        "position": 1,
-        "item": {
-            "@id": "https://.../bandcamp.com/track/...",
-            "url": "https://.../bandcamp.com/track/...",
+        """Tracks JSON structure as of mid April, 2021.
+        "itemListElement": [{
+          "@type": "ListItem"
+          "position": 1,
+          "item": {
+            "@id": "https://sinensis-ute.bandcamp.com/track/live-at-parken",
+            "name": "Live At PARKEN",
             "@type": ["MusicRecording"],
-            "name": "A1 - SMFORMA - Giliau nei garsas",
-            "duration": "P00H04M43S"
+            "copyrightNotice": "All Rights Reserved",
+            "duration": "P01H00M00S",
             "additionalProperty": [
-                {"@type": "PropertyValue", "name": "track_id", "value": 1867729685},
-                {"@type": "PropertyValue", "name": "duration_secs", "value": 222.162},
-                {"@type": "PropertyValue", "name": "file", "value": {"mp3-128": "...."}},
-                {"@type": "PropertyValue", "name": "streaming", "value": true},
-                {"@type": "PropertyValue", "name": "tracknum", "value": 2}
-            ],
-        },
+              { "value": 613900326,
+                "name": "track_id",
+                "@type": "PropertyValue" },
+              { ... and same structure found for the following fields
+                "name": "duration_secs",
+                "name": "file_mp3-128",
+                "name": "license_name",
+                "name": "streaming",
+                "name": "tracknum" }
+            ]
+          }
+        }]
         """
         tracks = []
         if not self._singleton:
@@ -297,7 +304,7 @@ class Metaguru(Helpers):
     @cached_property
     def is_single_artist(self) -> bool:
         unique_artists = {
-            re.sub(r" ft\. .*", "", t["artist"]) if t["artist"] else None
+            re.sub(r" f(ea)?t\. .*", "", t["artist"]) if t["artist"] else None
             for t in self.tracks
         }
         unique_artists.discard(None)
@@ -312,7 +319,7 @@ class Metaguru(Helpers):
         return (
             "EP" in self.album_name
             or "EP" in self.disctitle
-            or (self.media == "Vinyl" and len(self.tracks) == 4)
+            or (self._all_medias != {DEFAULT_MEDIA} and len(self.tracks) < 5)
         )
 
     @cached_property
@@ -341,9 +348,7 @@ class Metaguru(Helpers):
             return "album"
         if self.is_va:
             return "compilation"
-        if self.is_ep:
-            return "ep"
-        return "album"
+        return "ep"
 
     @property
     def _common(self) -> JSONDict:
@@ -373,7 +378,7 @@ class Metaguru(Helpers):
         return TrackInfo(
             **self._common,
             title=track.get("title"),
-            track_id=kwargs.pop("track_id", None) or track.get("url"),
+            track_id=kwargs.pop("track_id", None) or track.get("@id"),
             artist=track.get("artist") or self.albumartist,
             index=index,
             length=self.get_duration(track),
@@ -424,10 +429,12 @@ class Metaguru(Helpers):
                     media = _format["musicReleaseFormat"]
                 except KeyError:
                     continue
-                medias[MEDIA_MAP[media]] = _format
+                human_name = MEDIA_MAP[media]
+                medias[human_name] = _format
         except (KeyError, AttributeError):
             return None
 
+        self._all_medias = set(medias)
         # if preference is given and the format is available, return it
         for preference in self.preferred_media.split(","):
             if preference in medias:

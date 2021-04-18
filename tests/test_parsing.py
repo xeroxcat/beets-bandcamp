@@ -199,6 +199,8 @@ def test_parse_catalognum(album, expected):
         ("Album (limited edition)", [], "Album"),
         ("Album - VARIOUS ARTISTS", [], "Album"),
         ("Drepa Mann", [], "Drepa Mann"),
+        ("Some ft. Some ONE - Album", ["Some ft. Some ONE"], "Album"),
+        ("Some feat. Some ONE - Album", ["Some feat. Some ONE"], "Album"),
     ],
 )
 def test_clean_up_album_name(album, extras, expected):

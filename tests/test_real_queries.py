@@ -1,3 +1,4 @@
+"""End to end tests aimed at catching html updates on bandcamp side."""
 import pytest
 from beets.library import Item
 
@@ -63,8 +64,9 @@ def check_album(actual, expected):
 
 
 def test_track_url_while_searching_album(single_track_album_search):
-    """If a `track` url was given as the Id searching for an `album`, the
-    plugin returns None, but and returns the data when `album` url is given."""
+    """If a `track` url was given as the ID searching for an `album`, the
+    plugin handles it and returns the album.
+    """
     track_url, expected_release = single_track_album_search
     plugin = BandcampPlugin()
 
@@ -75,7 +77,7 @@ def test_track_url_while_searching_album(single_track_album_search):
 
 
 def test_candidates(ep_album):
-    track_url, expected_release = ep_album
+    _, expected_release = ep_album
     expected_album = expected_release.albuminfo
     plugin = BandcampPlugin()
 

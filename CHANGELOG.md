@@ -1,3 +1,16 @@
+## [0.7.2] 2021-04-18
+
+### Fixed
+
+- Responded to bandcamp html updates:
+  * `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
+    `/track/<name>` output when the track is part of an album.
+  * `url` field has disappeared from track objects - using `@id` instead.
+
+- Parsing:
+  * Token `feat.` is now recognised as a valid member of the `artist` field.
+
+
 ## [0.7.1] 2021-03-15
 
 ### Fixed
