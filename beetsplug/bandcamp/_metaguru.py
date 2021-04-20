@@ -36,10 +36,12 @@ MEDIA_MAP = {
 }
 VALID_URL_CHARS = {*ascii_lowercase, *digits}
 
-_catalognum = r"([^\d\W]+[_\W]?\d{2,}(?:\W\d|CD)?)"
+_catalognum = r"([A-Z][^-.\s\d]+[-.\s]?\d{2,4}(?:[.-]?\d|CD)?)"
 _exclusive = r"\s?[\[(](bandcamp )?(digi(tal)? )?(bonus|only|exclusive)[\])]"
+_catalognum_header = r"(?:Catalogue(?: (?:Number|N[or])?)?|Cat N[or])\.?:"
 PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
+    "desc_catalognum": re.compile(rf"{_catalognum_header} ({_catalognum})"),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_excl": re.compile(r"(?i:vol(ume)?|artists)|202[01]|(^|\s)C\d\d|\d+/\d+"),
@@ -48,7 +50,7 @@ PATTERNS: Dict[str, Pattern] = {
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
-((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)\s?[.-][^\w]*)?
+((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)\s?[.-]+(?=[^\d]))?
 (\s?(?P<artist>[^-]*)(\s-\s))?
 (?P<title>(\b([^\s]-|-[^\s]|[^-])+$))""",
         re.VERBOSE,
@@ -98,15 +100,19 @@ class Helpers:
             return {"title": name, "artist": None, "track_alt": None}
 
     @staticmethod
-    def parse_catalognum(album: str, disctitle: str) -> str:
+    def parse_catalognum(album: str, disctitle: str, description: str) -> str:
         for pattern, string in [
+            (PATTERNS["desc_catalognum"], description),
             (PATTERNS["quick_catalognum"], album),
             (PATTERNS["catalognum"], disctitle),
             (PATTERNS["catalognum"], album),
         ]:
             match = re.search(pattern, re.sub(PATTERNS["catalognum_excl"], "", string))
             if match:
-                return [group for group in match.groups() if group].pop()
+                try:
+                    return next(group for group in match.groups() if group)
+                except StopIteration:
+                    continue
 
         return ""
 
@@ -124,17 +130,33 @@ class Helpers:
 
     @staticmethod
     def clean_up_album_name(name: str, *args: str) -> str:
-        excl = "Various Artists|limited edition"
-
+        """Return clean album name.
+        If it ends up cleaning the name entirely, then return the first `args` member
+        if any given (catalognum or label). If not given, return the original name.
+        """
+        # always removed
+        exclude = ["E.P.", "various artists", "limited edition", "free download"]
+        # add provided arguments
+        exclude.extend(args)
         # handle special chars
-        extras = "|".join(map(re.escape, args))
-        excl = rf"({excl}|{extras})" if extras else rf"({excl})"
+        excl = "|".join(map(re.escape, exclude))
 
-        pat = re.compile(
-            rf" EP|({excl}\s[|/]+\s?)|[\[(]{excl}[])]|(\s-\s){excl}|{excl}(\s?-\s)",
-            flags=re.IGNORECASE,
+        _with_brackparens = r"[\[(]({})[])]"
+        _opt_brackparens = r"[\[(]?({})[])]?"
+        _lead_or_trail_dash = r"(\s-\s)({0})|({0})(\s?-\s)"
+        _followed_by_pipe_or_slash = r"({})\s[|/]+\s?"
+        _trails = r" ({})$"
+        pattern = "|".join(
+            [
+                " " + _opt_brackparens.format("[EL]P"),
+                _followed_by_pipe_or_slash.format(excl),
+                _with_brackparens.format(excl),
+                _lead_or_trail_dash.format(excl),
+                _trails.format(excl),
+            ]
         )
-        return re.sub(pat, "", name).strip()
+        pat = re.compile(pattern, flags=re.IGNORECASE)
+        return re.sub(pat, "", name).strip() or (args[0] if args else name)
 
 
 class Metaguru(Helpers):
@@ -166,7 +188,7 @@ class Metaguru(Helpers):
 
     @property
     def clean_album_name(self) -> str:
-        args = {self.label, self.catalognum}.difference({""})
+        args = {self.catalognum, self.label}.difference({""})
         if not self._singleton:
             args.add(self.albumartist)
         return self.clean_up_album_name(self.album_name, *args)
@@ -217,8 +239,7 @@ class Metaguru(Helpers):
 
     @cached_property
     def catalognum(self) -> str:
-        # TODO: Can also search the description for more info, e.g. catalog: catalognum
-        return self.parse_catalognum(self.album_name, self.disctitle)
+        return self.parse_catalognum(self.album_name, self.disctitle, self.description)
 
     @cached_property
     def country(self) -> str:

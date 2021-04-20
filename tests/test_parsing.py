@@ -94,6 +94,7 @@ def test_parse_release_date(string, expected):
         ("A1. Artist - Title", ("A1", "Artist", "Title")),
         ("A1- Artist - Title", ("A1", "Artist", "Title")),
         ("A1.- Artist - Title", ("A1", "Artist", "Title")),
+        ("1. Artist - Title", ("1", "Artist", "Title")),
         ("1.Artist - Title", ("1", "Artist", "Title")),
         ("DJ BEVERLY HILL$ - Raw Steeze", (None, "DJ BEVERLY HILL$", "Raw Steeze")),
         ("LI$INGLE010 - cyberflex - LEVEL X", (None, "cyberflex", "LEVEL X")),
@@ -102,6 +103,7 @@ def test_parse_release_date(string, expected):
         ("&$%@#!", (None, None, "&$%@#!")),
         ("24 Hours", (None, None, "24 Hours")),
         ("Some tune (Someone's Remix)", (None, None, "Some tune (Someone's Remix)")),
+        ("19.85 - Colapso Inevitable", (None, "19.85", "Colapso Inevitable")),
     ],
 )
 def test_parse_track_name(name, expected):
@@ -153,29 +155,36 @@ def test_parse_country(name, expected):
 
 
 @pytest.mark.parametrize(
-    ("album", "expected"),
+    ("description", "album", "expected"),
     [
-        ("Tracker-229 [PRH-002]", "PRH-002"),
-        ("[PRH-002] Tracker-229", "PRH-002"),
-        ("Tracker-229 PRH-002", "Tracker-229"),
-        ("ISMVA003.2", "ISMVA003.2"),
-        ("UTC003-CD", "UTC003"),
-        ("UTC-003", "UTC-003"),
-        ("EP [SINDEX008]", "SINDEX008"),
-        ("2 x Vinyl LP - MTY003", "MTY003"),
-        ("Kulør 001", "Kulør 001"),
-        ("00M", ""),
-        ("X-Coast - Dance Trax Vol.30", ""),
-        ("Christmas 2020", ""),
-        ("Various Artists 001", ""),
-        ("C30 Cassette", ""),
-        ("BC30 Hello", "BC30"),
-        ("Blood 1/4", ""),
-        ("Emotion 1 - Kulør 008", "Kulør 008"),
+        ("", "Tracker-229 [PRH-002]", "PRH-002"),
+        ("", "[PRH-002] Tracker-229", "PRH-002"),
+        ("", "Tracker-229 PRH-002", "Tracker-229"),
+        ("", "ISMVA003.2", "ISMVA003.2"),
+        ("", "UTC003-CD", "UTC003"),
+        ("", "UTC-003", "UTC-003"),
+        ("", "EP [SINDEX008]", "SINDEX008"),
+        ("", "2 x Vinyl LP - MTY003", "MTY003"),
+        ("", "Kulør 001", "Kulør 001"),
+        ("", "00M", ""),
+        ("", "X-Coast - Dance Trax Vol.30", ""),
+        ("", "Christmas 2020", ""),
+        ("", "Various Artists 001", ""),
+        ("", "C30 Cassette", ""),
+        ("", "BC30 Hello", "BC30"),
+        ("", "Blood 1/4", ""),
+        ("", "Emotion 1 - Kulør 008", "Kulør 008"),
+        ("", "zz333HZ with remixes from Le Chocolat Noir", ""),
+        ("Catalogue Number: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue Nr: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue No.: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue: CTU-300", "UTC-003", "CTU-300"),
+        ("Cat No: TE0029", "UTC-003", "TE0029"),
+        ("Cat Nr.: TE0029", "UTC-003", "TE0029"),
     ],
 )
-def test_parse_catalognum(album, expected):
-    assert Metaguru.parse_catalognum(album, "") == expected
+def test_parse_catalognum(description, album, expected):
+    assert Metaguru.parse_catalognum(album, "", description) == expected
 
 
 @pytest.mark.parametrize(
@@ -185,6 +194,12 @@ def test_parse_catalognum(album, expected):
         ("Various Artists - Album", [], "Album"),
         ("Various Artists Album", [], "Various Artists Album"),
         ("Album EP", [], "Album"),
+        ("Album [EP]", [], "Album"),
+        ("Album (EP)", [], "Album"),
+        ("Album E.P.", [], "Album"),
+        ("Album LP", [], "Album"),
+        ("Album [LP]", [], "Album"),
+        ("Album (LP)", [], "Album"),
         ("[Label] Album EP", ["Label"], "Album"),
         ("Artist - Album EP", ["Artist"], "Album"),
         ("Label | Album", ["Label"], "Album"),
@@ -198,6 +213,8 @@ def test_parse_catalognum(album, expected):
         ("Drepa Mann", [], "Drepa Mann"),
         ("Some ft. Some ONE - Album", ["Some ft. Some ONE"], "Album"),
         ("Some feat. Some ONE - Album", ["Some feat. Some ONE"], "Album"),
+        ("Healing Noise (EP) (Free Download)", [], "Healing Noise"),
+        ("[MCVA003] - VARIOUS ARTISTS", ["MCVA003"], "MCVA003"),
     ],
 )
 def test_clean_up_album_name(album, extras, expected):

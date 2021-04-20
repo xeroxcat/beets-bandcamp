@@ -1,4 +1,4 @@
-## [0.7.2] 2021-04-xx - WIP
+## [0.8.0] 2021-04-20
 
 ### Fixed
 
@@ -14,9 +14,11 @@
 - Parsing / logic:
 
   - Token `feat.` is now recognised as a valid member of the `artist` field.
-  - Updated `albumtype` logic: in some `compilation` cases the track artist is missing -
-    until now it would sometimes get set to _Various Artists_ - instead it now defaults to
-    the original `albumartist`.
+  - `free download`, `[EP|LP]`, `(EP|LP)`, `E.P.`, `LP` are now cleaned from the album name.
+  - Updated `albumtype` logic: in some `compilation` cases track artists would go missing
+    and get set to _Various Artists_ - instead it now defaults to the original
+    `albumartist`.
+  - Handling a couple of edge cases in the track name / title, and catalognum parsers.
 
 ### Updated
 
@@ -34,6 +36,7 @@
 
 ### Added
 
+- Release description is now checked for the catalogue number.
 - Added a test based on parsing _the JSON output_ directly without having to parse the
   entire HTML. Bandcamp have been moving away from HTML luckily, so let's hope the trend
   continues.

@@ -382,10 +382,10 @@ def ep() -> Tuple[str, ReleaseInfo]:
     ]
     info.set_albuminfo(
         tracks,
-        album="Kickdown Vienna",
+        album="fa010 | Kickdown Vienna",
         albumartist="jeånne, DJ DISRESPECT",
         albumtype="ep",
-        catalognum="fa010",
+        catalognum="",
         label="falling apart",
         release_date=date(2020, 10, 9),
         va=False,
