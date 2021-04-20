@@ -376,7 +376,7 @@ class Metaguru(Helpers):
             country=self.country,
         )
 
-    def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs) -> TrackInfo:
+    def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs: Any) -> TrackInfo:
         index = kwargs.pop("index", None) or track.get("position")
         return TrackInfo(
             **self._common,

@@ -140,7 +140,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
             clue.startswith("http") and ("album" in clue or "track" in clue)
         )
 
-    def guru(self, url: str, html: str = None) -> Optional[Metaguru]:
+    def guru(self, url: str, html: Optional[str] = None) -> Optional[Metaguru]:
         """Return cached guru. If there isn't one, fetch the url if html isn't
         already given, initialise guru and add it to the cache. This way they
         be re-used by separate import stages.
@@ -217,7 +217,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
         return None
 
     def candidates(self, items, artist, album, va_likely, extra_tags=None):
-        # type: (List[Item], str, str, bool, JSONDict) -> Iterator[AlbumInfo]
+        # type: (List[Item], str, str, bool, Optional[JSONDict]) -> Iterator[AlbumInfo]
         """Return a sequence of AlbumInfo objects that match the
         album whose items are provided.
         """
