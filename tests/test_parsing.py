@@ -1,4 +1,6 @@
 """Module for tests related to parsing."""
+import json
+
 import pytest
 
 from beetsplug.bandcamp._metaguru import NEW_BEETS, Metaguru, urlify
@@ -11,6 +13,39 @@ def check(actual, expected) -> None:
         assert actual == expected
     else:
         assert vars(actual) == vars(expected)
+
+
+@pytest.mark.parametrize(
+    ("meta", "expected"),
+    [
+        ({}, ""),
+        ({"description": "hello"}, "hello"),
+        ({"description": "Includes high-quality download"}, ""),
+        (
+            {
+                "description": "",
+                "albumRelease": [
+                    {"musicReleaseFormat": "VinylFormat", "description": "sick vinyl"}
+                ],
+            },
+            "sick vinyl",
+        ),
+        (
+            {
+                "description": "sickest vinyl",
+                "albumRelease": [
+                    {"musicReleaseFormat": "VinylFormat", "description": "sick vinyl"}
+                ],
+            },
+            "sickest vinyl",
+        ),
+    ],
+)
+def test_description(meta, expected):
+    meta.update(datePublished="doesntmatter")
+    guru = Metaguru(json.dumps(meta), media="Vinyl")
+    guru._media = meta.get("albumRelease", [{}])[0]
+    assert guru.description == expected, vars(guru)
 
 
 @pytest.mark.parametrize(
@@ -54,62 +89,26 @@ def test_parse_release_date(string, expected):
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        (
-            "Title",
-            {"track_alt": None, "artist": None, "title": "Title"},
-        ),
-        (
-            "Artist - Title",
-            {"track_alt": None, "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1. Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "A1.- Artist - Title",
-            {"track_alt": "A1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "1.Artist - Title",
-            {"track_alt": "1", "artist": "Artist", "title": "Title"},
-        ),
-        (
-            "DJ BEVERLY HILL$ - Raw Steeze",
-            {"track_alt": None, "artist": "DJ BEVERLY HILL$", "title": "Raw Steeze"},
-        ),
-        (
-            "LI$INGLE010 - cyberflex - LEVEL X",
-            {"track_alt": None, "artist": "cyberflex", "title": "LEVEL X"},
-        ),
-        (
-            "Fifty-Third ft. SYH",
-            {"track_alt": None, "artist": None, "title": "Fifty-Third ft. SYH"},
-        ),
-        (
-            "I'll Become Pure N-R-G",
-            {"track_alt": None, "artist": None, "title": "I'll Become Pure N-R-G"},
-        ),
-        (
-            "&$%@#!",
-            {"track_alt": None, "artist": None, "title": "&$%@#!"},
-        ),
-        (
-            "24 Hours",
-            {"track_alt": None, "artist": None, "title": "24 Hours"},
-        ),
-        (
-            "Some tune (Someone's Remix)",
-            {"track_alt": None, "artist": None, "title": "Some tune (Someone's Remix)"},
-        ),
+        ("Title", (None, None, "Title")),
+        ("Artist - Title", (None, "Artist", "Title")),
+        ("A1. Artist - Title", ("A1", "Artist", "Title")),
+        ("A1- Artist - Title", ("A1", "Artist", "Title")),
+        ("A1.- Artist - Title", ("A1", "Artist", "Title")),
+        ("1. Artist - Title", ("1", "Artist", "Title")),
+        ("1.Artist - Title", ("1", "Artist", "Title")),
+        ("DJ BEVERLY HILL$ - Raw Steeze", (None, "DJ BEVERLY HILL$", "Raw Steeze")),
+        ("LI$INGLE010 - cyberflex - LEVEL X", (None, "cyberflex", "LEVEL X")),
+        ("Fifty-Third ft. SYH", (None, None, "Fifty-Third ft. SYH")),
+        ("I'll Become Pure N-R-G", (None, None, "I'll Become Pure N-R-G")),
+        ("&$%@#!", (None, None, "&$%@#!")),
+        ("24 Hours", (None, None, "24 Hours")),
+        ("Some tune (Someone's Remix)", (None, None, "Some tune (Someone's Remix)")),
+        ("19.85 - Colapso Inevitable", (None, "19.85", "Colapso Inevitable")),
     ],
 )
 def test_parse_track_name(name, expected):
-    assert Metaguru.parse_track_name(name) == expected
+    parts = ("track_alt", "artist", "title")
+    assert Metaguru.parse_track_name(name) == dict(zip(parts, expected))
 
 
 @pytest.mark.parametrize(
@@ -150,35 +149,42 @@ def test_check_digital_only(name, expected_digital_only, expected_name):
     ],
 )
 def test_parse_country(name, expected):
-    line = f'<span class="location secondaryText">{name}</span>'
-    actual = Metaguru(line).country
-    assert actual == expected
+    guru = Metaguru("")
+    guru.meta = {"publisher": {"foundingLocation": {"name": name}}}
+    assert guru.country == expected
 
 
 @pytest.mark.parametrize(
-    ("album", "expected"),
+    ("description", "album", "expected"),
     [
-        ("Tracker-229 [PRH-002]", "PRH-002"),
-        ("[PRH-002] Tracker-229", "PRH-002"),
-        ("Tracker-229 PRH-002", "Tracker-229"),
-        ("ISMVA003.2", "ISMVA003.2"),
-        ("UTC003-CD", "UTC003"),
-        ("UTC-003", "UTC-003"),
-        ("EP [SINDEX008]", "SINDEX008"),
-        ("2 x Vinyl LP - MTY003", "MTY003"),
-        ("Kulør 001", "Kulør 001"),
-        ("00M", ""),
-        ("X-Coast - Dance Trax Vol.30", ""),
-        ("Christmas 2020", ""),
-        ("Various Artists 001", ""),
-        ("C30 Cassette", ""),
-        ("BC30 Hello", "BC30"),
-        ("Blood 1/4", ""),
-        ("Emotion 1 - Kulør 008", "Kulør 008"),
+        ("", "Tracker-229 [PRH-002]", "PRH-002"),
+        ("", "[PRH-002] Tracker-229", "PRH-002"),
+        ("", "Tracker-229 PRH-002", "Tracker-229"),
+        ("", "ISMVA003.2", "ISMVA003.2"),
+        ("", "UTC003-CD", "UTC003"),
+        ("", "UTC-003", "UTC-003"),
+        ("", "EP [SINDEX008]", "SINDEX008"),
+        ("", "2 x Vinyl LP - MTY003", "MTY003"),
+        ("", "Kulør 001", "Kulør 001"),
+        ("", "00M", ""),
+        ("", "X-Coast - Dance Trax Vol.30", ""),
+        ("", "Christmas 2020", ""),
+        ("", "Various Artists 001", ""),
+        ("", "C30 Cassette", ""),
+        ("", "BC30 Hello", "BC30"),
+        ("", "Blood 1/4", ""),
+        ("", "Emotion 1 - Kulør 008", "Kulør 008"),
+        ("", "zz333HZ with remixes from Le Chocolat Noir", ""),
+        ("Catalogue Number: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue Nr: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue No.: TE0029", "UTC-003", "TE0029"),
+        ("Catalogue: CTU-300", "UTC-003", "CTU-300"),
+        ("Cat No: TE0029", "UTC-003", "TE0029"),
+        ("Cat Nr.: TE0029", "UTC-003", "TE0029"),
     ],
 )
-def test_parse_catalognum(album, expected):
-    assert Metaguru.parse_catalognum(album, "") == expected
+def test_parse_catalognum(description, album, expected):
+    assert Metaguru.parse_catalognum(album, "", description) == expected
 
 
 @pytest.mark.parametrize(
@@ -188,6 +194,12 @@ def test_parse_catalognum(album, expected):
         ("Various Artists - Album", [], "Album"),
         ("Various Artists Album", [], "Various Artists Album"),
         ("Album EP", [], "Album"),
+        ("Album [EP]", [], "Album"),
+        ("Album (EP)", [], "Album"),
+        ("Album E.P.", [], "Album"),
+        ("Album LP", [], "Album"),
+        ("Album [LP]", [], "Album"),
+        ("Album (LP)", [], "Album"),
         ("[Label] Album EP", ["Label"], "Album"),
         ("Artist - Album EP", ["Artist"], "Album"),
         ("Label | Album", ["Label"], "Album"),
@@ -199,6 +211,10 @@ def test_parse_catalognum(album, expected):
         ("Album (limited edition)", [], "Album"),
         ("Album - VARIOUS ARTISTS", [], "Album"),
         ("Drepa Mann", [], "Drepa Mann"),
+        ("Some ft. Some ONE - Album", ["Some ft. Some ONE"], "Album"),
+        ("Some feat. Some ONE - Album", ["Some feat. Some ONE"], "Album"),
+        ("Healing Noise (EP) (Free Download)", [], "Healing Noise"),
+        ("[MCVA003] - VARIOUS ARTISTS", ["MCVA003"], "MCVA003"),
     ],
 )
 def test_clean_up_album_name(album, extras, expected):

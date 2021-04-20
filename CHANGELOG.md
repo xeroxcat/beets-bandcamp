@@ -1,9 +1,53 @@
+## [0.8.0] 2021-04-20
+
+### Fixed
+
+- Responded to bandcamp html updates:
+
+  - `artist_id` now lies under `publisher` resource (previously `byArtist`) in the
+    `/track/<name>` output when the track is part of an album.
+  - `url` field has disappeared from track objects - using `@id` instead.
+  - `country` and `label` fields are now found in the JSON data and thus we make use of it
+  - Updated and truncated test html files since we now only need to see the beginning of
+    the document.
+
+- Parsing / logic:
+
+  - Token `feat.` is now recognised as a valid member of the `artist` field.
+  - `free download`, `[EP|LP]`, `(EP|LP)`, `E.P.`, `LP` are now cleaned from the album name.
+  - Updated `albumtype` logic: in some `compilation` cases track artists would go missing
+    and get set to _Various Artists_ - instead it now defaults to the original
+    `albumartist`.
+  - Handling a couple of edge cases in the track name / title, and catalognum parsers.
+
+### Updated
+
+- Package:
+
+  - Moved `beets` from main to dev dependencies.
+  - Updated supported python versions range (3.6.x-3.9.x)
+  - Added pylint.
+  - Removed dependency on `packaging` - using `pkg_resources` instead.
+
+- Internal:
+
+  - Reintroduced `@cached_property` across most of the fields having found how often certain
+    ones get called.
+
+### Added
+
+- Release description is now checked for the catalogue number.
+- Added a test based on parsing _the JSON output_ directly without having to parse the
+  entire HTML. Bandcamp have been moving away from HTML luckily, so let's hope the trend
+  continues.
+- Added a tiny cmd-line tool `url2json` which simply outputs either a compacted or a
+  human version of the JSON data that is found for the given bandcamp URL.
+
 ## [0.7.1] 2021-03-15
 
 ### Fixed
 
 - Fixed singleton regression where track list was getting read incorrectly.
-
 
 ## [0.7.0] 2021-03-15
 
@@ -62,7 +106,6 @@
 
 - Parsing: country/location name parser now takes into account punctuation such as in
   `St. Louis` - it previously ignored full stops.
-
 
 ## [0.6.0] 2021-02-10
 

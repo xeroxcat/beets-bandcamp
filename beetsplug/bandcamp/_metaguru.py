@@ -4,21 +4,16 @@ import re
 from datetime import date, datetime
 from functools import reduce
 from math import floor
-from operator import truth
 from string import ascii_lowercase, digits
-from typing import Any, Dict, List, Optional, Pattern, Union
+from typing import Any, Dict, List, Optional, Pattern, Set, Union
 from unicodedata import normalize
 
-from beets import __version__ as beets_version
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from cached_property import cached_property
-from packaging.version import parse
+from pkg_resources import get_distribution, parse_version
 from pycountry import countries, subdivisions
 
-NEW_BEETS = True
-if parse(beets_version) < parse("1.5.0"):
-    NEW_BEETS = False
-
+NEW_BEETS = get_distribution("beets").parsed_version >= parse_version("1.5.0")
 
 JSONDict = Dict[str, Any]
 
@@ -31,7 +26,7 @@ COUNTRY_OVERRIDES = {
 }
 DATE_FORMAT = "%d %B %Y"
 DATA_SOURCE = "bandcamp"
-DEFAULT_COUNTRY = "XW"
+WORLDWIDE = "XW"
 DEFAULT_MEDIA = "Digital Media"
 MEDIA_MAP = {
     "VinylFormat": "Vinyl",
@@ -41,21 +36,21 @@ MEDIA_MAP = {
 }
 VALID_URL_CHARS = {*ascii_lowercase, *digits}
 
-_catalognum = r"([^\d\W]+[_\W]?\d{2,}(?:\W\d|CD)?)"
+_catalognum = r"([A-Z][^-.\s\d]+[-.\s]?\d{2,4}(?:[.-]?\d|CD)?)"
 _exclusive = r"\s?[\[(](bandcamp )?(digi(tal)? )?(bonus|only|exclusive)[\])]"
+_catalognum_header = r"(?:Catalogue(?: (?:Number|N[or])?)?|Cat N[or])\.?:"
 PATTERNS: Dict[str, Pattern] = {
     "meta": re.compile(r".*datePublished.*", flags=re.MULTILINE),
+    "desc_catalognum": re.compile(rf"{_catalognum_header} ({_catalognum})"),
     "quick_catalognum": re.compile(rf"\[{_catalognum}\]"),
     "catalognum": re.compile(rf"^{_catalognum}|{_catalognum}$"),
     "catalognum_excl": re.compile(r"(?i:vol(ume)?|artists)|202[01]|(^|\s)C\d\d|\d+/\d+"),
-    "country": re.compile(r'location\ssecondaryText">(?:[\w\s.]*, )?([\w\s,]+){1,4}'),
     "digital": re.compile(rf"^DIGI (\d+\.\s?)?|(?i:{_exclusive})"),
-    "label": re.compile(r'og:site_name".*content="([^"]*)"'),
     "lyrics": re.compile(r'"lyrics":({[^}]*})'),
     "release_date": re.compile(r"release[ds] ([\d]{2} [A-Z][a-z]+ [\d]{4})"),
     "track_name": re.compile(
         r"""
-((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)\s?[.-][^\w]*)?
+((?P<track_alt>(^[ABCDEFGH]{1,3}\d|^\d)\d?)\s?[.-]+(?=[^\d]))?
 (\s?(?P<artist>[^-]*)(\s-\s))?
 (?P<title>(\b([^\s]-|-[^\s]|[^-])+$))""",
         re.VERBOSE,
@@ -105,15 +100,19 @@ class Helpers:
             return {"title": name, "artist": None, "track_alt": None}
 
     @staticmethod
-    def parse_catalognum(album: str, disctitle: str) -> str:
+    def parse_catalognum(album: str, disctitle: str, description: str) -> str:
         for pattern, string in [
+            (PATTERNS["desc_catalognum"], description),
             (PATTERNS["quick_catalognum"], album),
             (PATTERNS["catalognum"], disctitle),
             (PATTERNS["catalognum"], album),
         ]:
             match = re.search(pattern, re.sub(PATTERNS["catalognum_excl"], "", string))
             if match:
-                return [group for group in match.groups() if group].pop()
+                try:
+                    return next(group for group in match.groups() if group)
+                except StopIteration:
+                    continue
 
         return ""
 
@@ -130,20 +129,34 @@ class Helpers:
         return 0
 
     @staticmethod
-    def clean_up_album_name(name: str, *args) -> str:
-        excl = "Various Artists|limited edition"
+    def clean_up_album_name(name: str, *args: str) -> str:
+        """Return clean album name.
+        If it ends up cleaning the name entirely, then return the first `args` member
+        if any given (catalognum or label). If not given, return the original name.
+        """
+        # always removed
+        exclude = ["E.P.", "various artists", "limited edition", "free download"]
+        # add provided arguments
+        exclude.extend(args)
+        # handle special chars
+        excl = "|".join(map(re.escape, exclude))
 
-        # remove special chars
-        special = r"[*.+\\]"
-        extras = "|".join(filter(truth, map(lambda x: re.sub(special, "", x), args)))
-
-        excl = rf"({excl}|{extras})" if extras else rf"({excl})"
-
-        pat = re.compile(
-            rf" EP|({excl}\s[|/]+\s?)|[\[(]{excl}[])]|(\s-\s){excl}|{excl}(\s?-\s)",
-            flags=re.IGNORECASE,
+        _with_brackparens = r"[\[(]({})[])]"
+        _opt_brackparens = r"[\[(]?({})[])]?"
+        _lead_or_trail_dash = r"(\s-\s)({0})|({0})(\s?-\s)"
+        _followed_by_pipe_or_slash = r"({})\s[|/]+\s?"
+        _trails = r" ({})$"
+        pattern = "|".join(
+            [
+                " " + _opt_brackparens.format("[EL]P"),
+                _followed_by_pipe_or_slash.format(excl),
+                _with_brackparens.format(excl),
+                _lead_or_trail_dash.format(excl),
+                _trails.format(excl),
+            ]
         )
-        return re.sub(pat, "", name).strip()
+        pat = re.compile(pattern, flags=re.IGNORECASE)
+        return re.sub(pat, "", name).strip() or (args[0] if args else name)
 
 
 class Metaguru(Helpers):
@@ -151,10 +164,12 @@ class Metaguru(Helpers):
     preferred_media: str
     meta: JSONDict
 
-    _media = None  # type: Optional[Dict[str, str]]
-    _singleton = False
+    _media: Dict[str, str]
+    _all_medias = {DEFAULT_MEDIA}  # type: Set[str]
+    _singleton = False  # type: bool
 
     def __init__(self, html: str, media: str = DEFAULT_MEDIA) -> None:
+        self._media = {}
         self.html = html
         self.preferred_media = media
 
@@ -163,38 +178,37 @@ class Metaguru(Helpers):
         if match:
             self.meta = json.loads(match.group())
 
-    def _search(self, pattern: Pattern[str]) -> str:
-        match = re.search(pattern, self.html)
-        return match.groups()[0] if match else ""
-
-    @property
+    @cached_property
     def album_name(self) -> str:
         return self.meta["name"]
 
-    @property
-    def clean_album_name(self) -> str:
-        args = [self.label, self.catalognum]
-        if not self._singleton:
-            args.append(self.albumartist)
-        return self.clean_up_album_name(self.album_name, *args)
+    @cached_property
+    def label(self) -> str:
+        return self.meta["publisher"]["name"]
 
     @property
+    def clean_album_name(self) -> str:
+        args = {self.catalognum, self.label}.difference({""})
+        if not self._singleton:
+            args.add(self.albumartist)
+        return self.clean_up_album_name(self.album_name, *args)
+
+    @cached_property
     def album_id(self) -> str:
         return self.meta["@id"]
 
-    @property
+    @cached_property
     def artist_id(self) -> str:
-        return self.meta["byArtist"]["@id"]
+        try:
+            return self.meta["byArtist"]["@id"]
+        except KeyError:
+            return self.meta["publisher"]["@id"]
 
     @property
     def image(self) -> str:
         # TODO: Need to test
         image = self.meta.get("image", "")
         return image[0] if isinstance(image, list) else image
-
-    @property
-    def label(self) -> str:
-        return self._search(PATTERNS["label"])
 
     @property
     def lyrics(self) -> Optional[str]:
@@ -204,82 +218,80 @@ class Metaguru(Helpers):
             return None
         return "\n".join(json.loads(m).get("text") for m in matches)
 
-    @property
+    @cached_property
     def release_date(self) -> date:
         datestr = self.parse_release_date(self.html)
         return datetime.strptime(datestr, DATE_FORMAT).date()
 
-    @property
-    def disctitle(self) -> str:
-        if self._media and self.media != "Digital Media":
-            return self._media.get("name", "")
-        return ""
-
-    @property
-    def catalognum(self) -> str:
-        # TODO: Can also search the description for more info, e.g. catalog: catalognum
-        return self.parse_catalognum(self.album_name, self.disctitle)
-
-    @property
-    def country(self) -> str:
-        country = self._search(PATTERNS["country"])
-        ascii_name = normalize("NFKD", country).encode("ascii", "ignore").decode()
-        try:
-            return (
-                COUNTRY_OVERRIDES.get(country)
-                or getattr(
-                    countries.get(name=ascii_name, default=object), "alpha_2", None
-                )
-                or subdivisions.lookup(ascii_name).country_code
-            )
-        except LookupError:
-            return DEFAULT_COUNTRY
-
-    @property
+    @cached_property
     def media(self) -> str:
-        if self._media:
-            return MEDIA_MAP[self._media["musicReleaseFormat"]]
-        return DEFAULT_MEDIA
+        """Return the human-readable version of the media format."""
+        return MEDIA_MAP.get(self._media.get("musicReleaseFormat", ""), DEFAULT_MEDIA)
+
+    @cached_property
+    def disctitle(self) -> str:
+        """Digital media does not have discs unfortunately."""
+        return "" if self.media == DEFAULT_MEDIA else self._media.get("name", "")
 
     @property
     def mediums(self) -> int:
-        if self.media != "Vinyl":
-            return 1
-        return self.get_vinyl_count(self.disctitle)
+        return self.get_vinyl_count(self.disctitle) if self.media == "Vinyl" else 1
 
-    @property
-    def medium(self) -> int:
-        """We can't tell the number of current disc for a multi-disc release."""
-        return 1
+    @cached_property
+    def catalognum(self) -> str:
+        return self.parse_catalognum(self.album_name, self.disctitle, self.description)
+
+    @cached_property
+    def country(self) -> str:
+        try:
+            loc = self.meta["publisher"]["foundingLocation"]["name"].rpartition(", ")[-1]
+            name = normalize("NFKD", loc).encode("ascii", "ignore").decode()
+            return (
+                COUNTRY_OVERRIDES.get(name)
+                or getattr(countries.get(name=name, default=object), "alpha_2", None)
+                or subdivisions.lookup(name).country_code
+            )
+        except (KeyError, ValueError, LookupError):
+            return WORLDWIDE
 
     @property
     def description(self) -> str:
-        descr = self.meta.get("description", "")
-        if not descr and self._media:
-            descr = self._media.get("description", "")
-            if descr.startswith("Includes high-quality dow"):
-                descr = ""
-        return descr
+        """Return album or media description of one of them exists and if it does not
+        start with a generic message.
+        """
+        return next(
+            filter(
+                lambda d: d and not d.startswith("Includes high-quality dow"),
+                map(lambda m: m.get("description", ""), (self.meta, self._media)),
+            ),
+            "",
+        )
 
-    @property
+    @cached_property
     def tracks(self) -> List[JSONDict]:
-        """`raw_track` example
-        "@type": "ListItem",
-        "position": 1,
-        "item": {
-            "@id": "https://.../bandcamp.com/track/...",
-            "url": "https://.../bandcamp.com/track/...",
+        """Tracks JSON structure as of mid April, 2021.
+        "itemListElement": [{
+          "@type": "ListItem"
+          "position": 1,
+          "item": {
+            "@id": "https://sinensis-ute.bandcamp.com/track/live-at-parken",
+            "name": "Live At PARKEN",
             "@type": ["MusicRecording"],
-            "name": "A1 - SMFORMA - Giliau nei garsas",
-            "duration": "P00H04M43S"
+            "copyrightNotice": "All Rights Reserved",
+            "duration": "P01H00M00S",
             "additionalProperty": [
-                {"@type": "PropertyValue", "name": "track_id", "value": 1867729685},
-                {"@type": "PropertyValue", "name": "duration_secs", "value": 222.162},
-                {"@type": "PropertyValue", "name": "file", "value": {"mp3-128": "...."}},
-                {"@type": "PropertyValue", "name": "streaming", "value": true},
-                {"@type": "PropertyValue", "name": "tracknum", "value": 2}
-            ],
-        },
+              { "value": 613900326,
+                "name": "track_id",
+                "@type": "PropertyValue" },
+              { ... and same structure found for the following fields
+                "name": "duration_secs",
+                "name": "file_mp3-128",
+                "name": "license_name",
+                "name": "streaming",
+                "name": "tracknum" }
+            ]
+          }
+        }]
         """
         tracks = []
         if not self._singleton:
@@ -295,13 +307,11 @@ class Metaguru(Helpers):
         return tracks
 
     @cached_property
-    def is_single_artist(self) -> bool:
-        unique_artists = {
-            re.sub(r" ft\. .*", "", t["artist"]) if t["artist"] else None
-            for t in self.tracks
-        }
-        unique_artists.discard(None)
-        return len(unique_artists) <= 1
+    def track_artists(self) -> Set[str]:
+        ignore = r" f(ea)?t\. .*"
+        artists = set(re.sub(ignore, "", t.get("artist") or "") for t in self.tracks)
+        artists.discard("")
+        return artists
 
     @property
     def is_lp(self) -> bool:
@@ -309,28 +319,28 @@ class Metaguru(Helpers):
 
     @cached_property
     def is_ep(self) -> bool:
-        return (
-            "EP" in self.album_name
-            or "EP" in self.disctitle
-            or (self.media == "Vinyl" and len(self.tracks) == 4)
+        return ("EP" in self.album_name or "EP" in self.disctitle) or (
+            self._all_medias != {DEFAULT_MEDIA} and len(self.tracks) < 5
         )
 
     @cached_property
     def is_va(self) -> bool:
         return "various artists" in self.album_name.lower() or (
-            not self.is_single_artist and not self.is_ep
+            len(self.track_artists) > 1 and len(self.tracks) > 4
         )
 
-    @property
+    @cached_property
     def bandcamp_albumartist(self) -> str:
+        """Return original album artist - most often the label name."""
         return self.meta["byArtist"]["name"]
 
-    @property
+    @cached_property
     def albumartist(self) -> str:
+        """Handle various artists and albums that have a single artist."""
         if self.is_va:
             return "Various Artists"
-        if self.is_single_artist and self.tracks and self.tracks[0].get("artist"):
-            return self.tracks[0]["artist"]
+        if len(self.track_artists) == 1:
+            return next(iter(self.track_artists))
         return self.bandcamp_albumartist
 
     @property
@@ -341,15 +351,13 @@ class Metaguru(Helpers):
             return "album"
         if self.is_va:
             return "compilation"
-        if self.is_ep:
-            return "ep"
-        return "album"
+        return "ep"
 
     @property
     def _common(self) -> JSONDict:
         return dict(
             data_source=DATA_SOURCE,
-            media=self.media or DEFAULT_MEDIA,
+            media=self.media,
             data_url=self.album_id,
             artist_id=self.artist_id,
         )
@@ -368,18 +376,18 @@ class Metaguru(Helpers):
             country=self.country,
         )
 
-    def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs) -> TrackInfo:
+    def _trackinfo(self, track: JSONDict, medium_total: int, **kwargs: Any) -> TrackInfo:
         index = kwargs.pop("index", None) or track.get("position")
         return TrackInfo(
             **self._common,
             title=track.get("title"),
-            track_id=kwargs.pop("track_id", None) or track.get("url"),
-            artist=track.get("artist") or self.albumartist,
+            track_id=kwargs.pop("track_id", None) or track.get("@id"),
+            artist=track.get("artist") or self.bandcamp_albumartist,
             index=index,
             length=self.get_duration(track),
             track_alt=track.get("track_alt"),
             disctitle=self.disctitle or None,
-            medium=self.medium,
+            medium=1,
             medium_index=index,
             medium_total=medium_total,
             **kwargs,
@@ -424,10 +432,12 @@ class Metaguru(Helpers):
                     media = _format["musicReleaseFormat"]
                 except KeyError:
                     continue
-                medias[MEDIA_MAP[media]] = _format
+                human_name = MEDIA_MAP[media]
+                medias[human_name] = _format
         except (KeyError, AttributeError):
             return None
 
+        self._all_medias = set(medias)
         # if preference is given and the format is available, return it
         for preference in self.preferred_media.split(","):
             if preference in medias:
