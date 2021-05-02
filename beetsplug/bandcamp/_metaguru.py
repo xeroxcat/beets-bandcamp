@@ -303,6 +303,8 @@ class Metaguru(Helpers):
             track["position"] = raw_track.get("position") or 1
             track.update(self.check_digital_only(track["name"]))
             track.update(self.parse_track_name(track["name"]))
+            if (not track.get("artist")) and isinstance(track.get("byArtist"), dict):
+                track["artist"] = track["byArtist"]["name"]
             tracks.append(track)
         return tracks
 
